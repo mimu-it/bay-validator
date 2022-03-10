@@ -1,0 +1,16 @@
+package #(package);
+
+#(import)
+
+/**
+ * @author xiao.hu
+ * create time:#(generateTime)
+ * 
+ */
+public final class ValueEnumRange {
+
+	#for(str : tableList)
+   		#(str)
+	#end
+	
+}

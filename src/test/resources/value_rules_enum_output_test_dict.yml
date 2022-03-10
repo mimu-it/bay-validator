@@ -1,0 +1,4 @@
+student:
+  domain:
+    type: enum_string
+    enum_values: domain_set

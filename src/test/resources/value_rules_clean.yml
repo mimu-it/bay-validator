@@ -1,0 +1,9 @@
+student:
+  id:
+    type: integer
+    numeric_min: 1
+    numeric_max: 128
+    decimal_min: null
+    decimal_max: null
+    enum_values: null
+  money:

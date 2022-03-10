@@ -1,0 +1,5 @@
+public static final class #(tableName) {
+	#for(fieldRuleStr : fieldRuleList)
+   		#(fieldRuleStr)
+	#end
+} 

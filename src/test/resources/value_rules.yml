@@ -1,0 +1,98 @@
+student:
+  id:
+    type: numeric
+    numeric_min: 1
+    numeric_max: 128
+    decimal_min: null
+    decimal_max: null
+    string_charset: utf8
+    string_regex_key: positive_integer
+    string_length_min: 0
+    string_length_max: 128
+    enum_values: null
+  big_id:
+    type: numeric
+    numeric_min: 1
+    numeric_max: 9007199254740993
+    decimal_min: null
+    decimal_max: null
+    string_charset: null
+    string_regex_key: null
+    string_length_min: null
+    string_length_max: null
+    enum_values: null
+  large_number:
+    type: numeric
+    numeric_min: 1
+    numeric_max: 18446744073709551616
+  money:
+    type: decimal
+    decimal_scale: 2
+    decimal_min: '200.00'
+    decimal_max: '300.00'
+  gender:
+    type: enum_string
+    numeric_min: null
+    numeric_max: null
+    string_charset: null
+    string_regex_key: null
+    string_length_min: null
+    string_length_max: null
+    enum_values:
+    - male
+    - female
+  phone_number:
+    type: string
+    numeric_min: null
+    numeric_max: null
+    string_charset: utf8
+    string_regex_key: phone_number
+    string_length_min: 11
+    string_length_max: 12
+    enum_values: null
+  game_card:
+    type: enum_numeric
+    numeric_min: null
+    numeric_max: null
+    string_charset: null
+    string_regex_key: null
+    string_length_min: null
+    string_length_max: null
+    enum_values:
+    - 1
+    - 2
+  game_long_card:
+    type: enum_numeric
+    numeric_min: null
+    numeric_max: null
+    string_charset: null
+    string_regex_key: null
+    string_length_min: null
+    string_length_max: null
+    enum_values:
+    - 3000000000
+    - 4000000000
+  float_card:
+    type: enum_decimal
+    enum_values:
+    - '3.11'
+    - '4000000000.123456'
+  age:
+    type: numeric
+    numeric_min: 0
+    numeric_max: 120
+  user_name:
+    type: string
+    string_charset: utf8
+    string_regex_key: only_chinese_and_english_and_underline
+    string_length_min: 3
+    string_length_max: 12
+  user_name_gbk:
+    type: string
+    string_charset: GBK
+    string_regex_key: only_chinese_and_english_and_underline
+    string_length_min: 3
+    string_length_max: 12
+  domain:
+    type: enum_string
+    enum_values: domain_set

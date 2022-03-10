@@ -1,0 +1,11 @@
+public static enum #(fieldName) {
+	#(enumValues);
+
+	private final #(javaType) value;
+
+    #(fieldName)(final #(javaType) newValue) {
+        value = newValue;
+    }
+
+    public #(javaType) val() { return value; }
+}
