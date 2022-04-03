@@ -163,7 +163,7 @@ HxValidator.prototype = {
         }
 
         let valueNumber = Number(value);
-        if (valueNumber >= numericMin && valueNumber < numericMax) {
+        if (valueNumber >= numericMin && valueNumber <= numericMax) {
             return "";
         }
 
@@ -178,7 +178,7 @@ HxValidator.prototype = {
         }
 
         let valueNumber = Number(value);
-        if (valueNumber >= numericMin && valueNumber < numericMax) {
+        if (valueNumber >= numericMin && valueNumber <= numericMax) {
             return "";
         }
 
@@ -258,8 +258,8 @@ HxValidator.prototype = {
         kit.debug("stringLengthMin: " + stringLengthMin);
         kit.debug("stringLengthMax: " + stringLengthMax);
         kit.debug("strLength: " + strLength);
-        kit.debug("result: " + (stringLengthMin <= strLength && strLength < stringLengthMax) );
-        if(stringLengthMin <= strLength && strLength < stringLengthMax) {
+        kit.debug("result: " + (stringLengthMin <= strLength && strLength <= stringLengthMax) );
+        if(stringLengthMin <= strLength && strLength <= stringLengthMax) {
             return "";
         }
         return "参数字符长度不符合规则";

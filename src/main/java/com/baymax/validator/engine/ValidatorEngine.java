@@ -19,17 +19,24 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.time.DateFormatUtils;
 import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
+
+import org.yaml.snakeyaml.introspector.PropertyUtils;
 import org.yaml.snakeyaml.nodes.Tag;
 
+import java.beans.BeanInfo;
+import java.beans.Introspector;
+import java.beans.PropertyDescriptor;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.function.Function;
 
 /**
  * @author xiao.hu
@@ -40,6 +47,9 @@ import java.util.*;
  *         对于参数而言，我们只取字符串值和数值，因为boolean类型也可以用true和false表示
  */
 public enum ValidatorEngine {
+	/**
+	 * 单例
+	 */
 	INSTANCE;
 
 	private static ObjectMapper mapper = new ObjectMapper();
@@ -84,7 +94,16 @@ public enum ValidatorEngine {
 	Map<String, Map<String, Object>> valueRulesMap;
 	Map<String, Map<String, Object>> commonValueRulesMap;
 
-	private static Set<String> ignoreKeys = new HashSet<String>();
+	/**
+	 * 决定键校验时使用驼峰还是下划线模式
+	 * @param useSnake
+	 */
+	private boolean useSnake = true;
+
+	/**
+	 * 可被自定义
+	 */
+	private static Set<String> ignoreKeys = new HashSet<>();
 	static {
 		ignoreKeys.add("id");
 		ignoreKeys.add("gmt_created");
@@ -138,7 +157,22 @@ public enum ValidatorEngine {
 	 */
 	public void init(String valueRulesYmlFilePath, String commonValueRulesYmlFilePath) {
 		init(valueRulesYmlFilePath);
-		this.commonValueRulesMap = loadValueRulesYml(commonValueRulesYmlFilePath);
+		if(commonValueRulesYmlFilePath != null) {
+			this.commonValueRulesMap = loadValueRulesYml(commonValueRulesYmlFilePath);
+		}
+	}
+
+	/**
+	 * 使用了通用配置
+	 * @param valueRulesYmlFilePath
+	 * @param commonValueRulesYmlFilePath
+	 */
+	public void init(String valueRulesYmlFilePath, String commonValueRulesYmlFilePath,
+					 Set<String> userIgnoreKeys, boolean customUseSnake) {
+		this.useSnake = customUseSnake;
+		ignoreKeys = userIgnoreKeys;
+		checkIgnoreKeysByUseSnake();
+		init(valueRulesYmlFilePath, commonValueRulesYmlFilePath);
 	}
 
 	/**
@@ -146,10 +180,37 @@ public enum ValidatorEngine {
 	 * @param valueRulesYmlFilePath
 	 * @param userIgnoreKeys
 	 */
-	public void init(String valueRulesYmlFilePath, Set<String> userIgnoreKeys) {
+	public void init(String valueRulesYmlFilePath, Set<String> userIgnoreKeys, boolean customUseSnake) {
+		this.useSnake = customUseSnake;
 		ignoreKeys = userIgnoreKeys;
+		checkIgnoreKeysByUseSnake();
 		RegexDict.INSTANCE.init();
 		this.valueRulesMap = loadValueRulesYml(valueRulesYmlFilePath);
+	}
+
+
+	/**
+	 * 判断当前预设的忽略字段是否也满足键的模式
+	 */
+	private void checkIgnoreKeysByUseSnake() {
+		for(String key : ignoreKeys) {
+			if(this.useSnake) {
+				char[] chars = key.toCharArray();
+				for(char s : chars) {
+					if(Character.isUpperCase(s)) {
+						throw new IllegalArgumentException("ignore keys must be snake naming mode");
+					}
+				}
+			}
+			else {
+				char[] chars = key.toCharArray();
+				for(char s : chars) {
+					if(s == '_') {
+						throw new IllegalArgumentException("ignore keys must be camel naming mode");
+					}
+				}
+			}
+		}
 	}
 
 	/**
@@ -472,7 +533,15 @@ public enum ValidatorEngine {
      */
     public Map<String, Object> getFieldValidatorRulesJson(String fieldKey) {
         FieldRule fieldRule = this.getFieldRules(fieldKey);
-        if (fieldRule == null) return null;
+        if (fieldRule == null) {
+        	return null;
+		}
+
+		/**
+		 * 不需要返回fieldKey
+		 */
+		fieldRule.setFieldKey("");
+
         try {
             mapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
             String jsonStr = mapper.writeValueAsString(fieldRule);
@@ -555,6 +624,123 @@ public enum ValidatorEngine {
 		}
 		return fr.validate(paramValue);
 	}
+
+
+	/**
+	 * JavaScript的数据类型，共有9种：
+	 * 值类型(基本类型)：字符串（String）、数字(Number)、布尔(Boolean)、空（Null）、未定义（Undefined）、Symbol。
+	 * 引用数据类型：    对象(Object)、数组(Array)、函数(Function)。
+	 *
+	 * Function<T,R>可以允许我们自定一个函数，通过给定参数T返回结果R
+	 *
+	 * @param bean
+	 * @param prefix
+	 * @param customIgnoreKeys
+	 * @param nullableKeys
+	 * @return
+	 */
+	public List<String> validate(Object bean, String prefix,
+							String[] customIgnoreKeys, String[] nullableKeys) {
+		List<String> errorKeys = new ArrayList<>();
+		try {
+			BeanInfo beanInfo = Introspector.getBeanInfo(bean.getClass());
+			PropertyDescriptor[] proDescriptors = beanInfo.getPropertyDescriptors();
+
+			List<String> setMethodCache = new ArrayList<>();
+			Method[] names = bean.getClass().getDeclaredMethods();
+			for(Method method : names) {
+				if(method.getName().startsWith("set")) {
+					setMethodCache.add(method.getName());
+				}
+			}
+
+			if (proDescriptors != null && proDescriptors.length > 0) {
+				for (PropertyDescriptor propDesc : proDescriptors) {
+
+
+					/**
+					 * 如果不存在写属性，说明不是get 和 set 方法
+					 *
+					 * 只有 void  setXXX 才会被认为是WriteMethod
+					 */
+					if (propDesc.getWriteMethod() == null) {
+						/**
+						 * 针对有些直接使用po传递controller参数的时候，set方法可能返回值不是void的情况
+						 * 虽然这样写不够纯粹，但是方便。不用重复定义类似的对象
+						 */
+						String poSetMethod = "s" + propDesc.getReadMethod().getName().substring(1);
+						if(!setMethodCache.contains(poSetMethod)) {
+							continue;
+						}
+					}
+
+					String name = propDesc.getName();
+
+					/**
+					 * 可以使用驼峰或者下划线
+					 */
+					if(useSnake) {
+						name = NameUtils.humpToLine(name);
+					}
+
+					Method method = propDesc.getReadMethod();
+					Object value = method.invoke(bean);
+
+					/**
+					 * 初始化时设定的可以忽略的键
+					 */
+					if(ignoreKeys.contains(name)) {
+						/** 忽略值的处理 */
+						continue;
+					}
+
+					/**
+					 * 用户定义的可以忽略的键
+					 */
+					if(customIgnoreKeys != null) {
+						if( Arrays.asList(customIgnoreKeys).contains(name)) {
+							/** 忽略值的处理 */
+							continue;
+						}
+					}
+
+					if((value != null) && !(value instanceof String) && !(value instanceof Number)
+							&& (!(value instanceof Boolean))) {
+						throw new UnsupportedOperationException(
+								String.format("The type of parameter is not supported, name: %s, value: %s"
+								, name, mapper.writeValueAsString(value)));
+					}
+
+					String valueStr = value == null ? "" : String.valueOf(value);
+					if(StringUtils.isBlank(valueStr)) {
+						/**
+						 * 非强制校验的键
+						 */
+						if(nullableKeys != null) {
+							if(Arrays.asList(nullableKeys).contains(name)) {
+								/** 忽略值的处理 */
+								continue;
+							}
+						}
+
+						errorKeys.add(name);
+						continue;
+					}
+
+					String prefixName = prefix + "." + name;
+					boolean isOK = ValidatorEngine.INSTANCE.validate(prefixName, valueStr);
+					if (!isOK) {
+						errorKeys.add(name);
+					}
+				}
+			}
+
+			return errorKeys;
+		} catch (Exception e) {
+			throw new IllegalStateException(e);
+		}
+	}
+
 
 	/**
 	 * 根据yml中的配置，将enum类型的配置生成java代码，供后端使用
@@ -707,7 +893,9 @@ public enum ValidatorEngine {
 				String key = entry.getKey();
 				Object val = entry.getValue();
 
-				if("fieldKey".equals(key)) continue;
+				if("fieldKey".equals(key)) {
+					continue;
+				}
 				ruleMap.put(NameUtils.humpToLine(key), val);
 			}
 

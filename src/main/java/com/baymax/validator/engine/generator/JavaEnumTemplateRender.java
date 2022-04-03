@@ -8,6 +8,9 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.List;
 
+/**
+ * @author xiao.hu
+ */
 public class JavaEnumTemplateRender {
     static Engine engine = Engine.use();
 

@@ -4,6 +4,7 @@ import com.baymax.validator.engine.RegexDict;
 import com.baymax.validator.engine.ValidatorEngine;
 import com.baymax.validator.engine.model.FieldRule;
 import com.baymax.validator.engine.model.sub.StringRegexFieldRule;
+import com.baymax.vo.Student;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jdk.nashorn.api.scripting.NashornScriptEngineFactory;
@@ -18,6 +19,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 
 public class ValidatorEngineTest {
@@ -97,7 +99,7 @@ public class ValidatorEngineTest {
         boolean isOK3 = ValidatorEngine.INSTANCE.validate("student.id", 0);
         Assert.assertFalse(isOK3);
 
-        boolean isOK4 = ValidatorEngine.INSTANCE.validate("student.id", 128);
+        boolean isOK4 = ValidatorEngine.INSTANCE.validate("student.id", 129);
         Assert.assertFalse(isOK4);
     }
 
@@ -110,7 +112,7 @@ public class ValidatorEngineTest {
         boolean isOK = ValidatorEngine.INSTANCE.validate("student.big_id", 9007199254740992l);
         Assert.assertTrue(isOK);
 
-        boolean isOK_false = ValidatorEngine.INSTANCE.validate("student.big_id", 9007199254740993l);
+        boolean isOK_false = ValidatorEngine.INSTANCE.validate("student.big_id", 9007199254740994l);
         Assert.assertFalse(isOK_false);
 
 
@@ -131,7 +133,7 @@ public class ValidatorEngineTest {
         boolean isOK3 = ValidatorEngine.INSTANCE.validate("student.money", "200.0123456789");
         Assert.assertTrue(isOK3);
 
-        boolean isOK_false = ValidatorEngine.INSTANCE.validate("student.money", "300.00");
+        boolean isOK_false = ValidatorEngine.INSTANCE.validate("student.money", "300.01");
         Assert.assertFalse(isOK_false);
     }
 
@@ -193,17 +195,17 @@ public class ValidatorEngineTest {
         ValidatorEngine.INSTANCE.init("value_rules.yml");
         String jsonStr = ValidatorEngine.INSTANCE.getFieldValidatorRulesJsonStr("student.game_long_card");
         System.out.println("testGetFieldValidatorRulesJsonStr => \n" + jsonStr);
-        Assert.assertEquals("{\"fieldKey\":\"student.game_long_card\",\"type\":\"enum_numeric\",\"enumValues\":[3000000000,4000000000]}", jsonStr);
+        Assert.assertEquals("{\"fieldKey\":\"\",\"type\":\"enum_numeric\",\"enumValues\":[3000000000,4000000000]}", jsonStr);
 
         String jsonStr2 = ValidatorEngine.INSTANCE.getFieldValidatorRulesJsonStr("student.phone_number");
         System.out.println("testGetFieldValidatorRulesJsonStr => \n" + jsonStr2);
         Assert.assertEquals(
-                "{\"fieldKey\":\"student.phone_number\"," +
+                "{\"fieldKey\":\"\"," +
                         "\"type\":\"string\"," +
                         "\"stringCharset\":\"utf8\"," +
                         "\"stringRegexKey\":\"phone_number\"," +
                         "\"stringLengthMin\":11," +
-                        "\"stringLengthMax\":12," +
+                        "\"stringLengthMax\":11," +
                         "\"regexStr\":\"^1[3|4|5|7|8][0-9]{9}$\"}", jsonStr2);
     }
 
@@ -599,7 +601,7 @@ public class ValidatorEngineTest {
 
 
         try {
-            engine.put("value", 120);
+            engine.put("value", 121);
 
             String result = (String) engine.eval("testHxValidator(fieldConfig, key, value)");
             Assert.assertEquals("数值型大小校验规则不符合规则", result);
@@ -744,5 +746,28 @@ public class ValidatorEngineTest {
                 "    string_length_min: 2\n" +
                 "    string_length_max: 3\n" +
                 "    type: String\n", dumpStr);
+    }
+
+
+
+    @Test
+    public void testValidateBean() {
+        ValidatorEngine.INSTANCE.init("value_rules.yml",
+                null, new HashSet<String>() {{
+                    add("id");
+                    add("version");
+                    add("is_deleted");
+                    add("modifier");
+                    add("creator");
+                    add("created_at");
+                    add("updated_at");
+                }}, true);
+
+        Student student = new Student();
+        student.setId(1);
+        student.setLargeNumber(9999);
+        student.setPhoneNumber("15973166256A");
+        List<String> errorKeys = ValidatorEngine.INSTANCE.validate(student, "student", null, null);
+        Assert.assertTrue(!errorKeys.isEmpty());
     }
 }
