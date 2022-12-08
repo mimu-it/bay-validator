@@ -48,7 +48,7 @@ student:
     string_charset: utf8
     string_regex_key: phone_number
     string_length_min: 11
-    string_length_max: 12
+    string_length_max: 11
     enum_values: null
   game_card:
     type: enum_numeric

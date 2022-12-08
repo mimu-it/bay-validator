@@ -12,7 +12,11 @@ import java.io.IOException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+/**
+ *
+ */
 public class FileWriter {
+    private static Pattern p = Pattern.compile("\\s+");
 
     private static void mkdirsIfNecessary(String path) {
         if (!new File(path).exists()) {
@@ -120,7 +124,6 @@ public class FileWriter {
      * @return
      */
     public static String cleanSpace(String str) {
-        Pattern p = Pattern.compile("\\s+");
         Matcher m = p.matcher(str);
         return m.replaceAll(" ");
     }

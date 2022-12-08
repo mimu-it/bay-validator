@@ -1,5 +1,8 @@
 package com.baymax.validator.engine.generator;
 
+/**
+ * @author xiao.hu
+ */
 public class JavaEnum {
 
     private String fieldName;

@@ -8,6 +8,9 @@ import java.io.UnsupportedEncodingException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+/**
+ *
+ */
 public class StringRegexFieldRule extends FieldRule {
 
     @Override
@@ -24,7 +27,7 @@ public class StringRegexFieldRule extends FieldRule {
         if(StringUtils.isNotBlank(charset) && stringLengthMin != null && stringLengthMax != null) {
             try {
                 int length = realVal.getBytes(charset).length;
-                if(length >= stringLengthMax || length < stringLengthMin) {
+                if(length > stringLengthMax || length < stringLengthMin) {
                     return false;
                 }
             } catch (UnsupportedEncodingException e) {

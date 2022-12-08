@@ -2,7 +2,7 @@ package com.baymax.pvg2.values;
 
 import java.math.BigDecimal;
 
-/** @author xiao.hu create time:2022-03-10 21:49:59 */
+/** @author xiao.hu create time:2022-12-07 19:30:34 */
 public final class ValueEnumRange {
 
   public static final class student {
