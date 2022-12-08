@@ -10,6 +10,7 @@ package com.baymax.validator.engine.generator.meta;
 public class ColumnMeta {
 
 	private String name;
+	private int displaySize;
 	private String abbreviationClass;
 	private String originClass;
 	
@@ -30,5 +31,13 @@ public class ColumnMeta {
 	}
 	public void setOriginClass(String originClass) {
 		this.originClass = originClass;
+	}
+
+	public int getDisplaySize() {
+		return displaySize;
+	}
+
+	public void setDisplaySize(int displaySize) {
+		this.displaySize = displaySize;
 	}
 }

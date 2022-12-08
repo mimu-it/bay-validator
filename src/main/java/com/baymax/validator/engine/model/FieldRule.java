@@ -14,6 +14,7 @@ import java.util.Set;
  *
  */
 public abstract class FieldRule {
+	private String dbType = null;
 	private String fieldKey = null;
 	private String type = null;
 	private BigInteger numericMin = null;
@@ -27,6 +28,14 @@ public abstract class FieldRule {
 	private List<Object> enumValues = null;
 
 	public abstract boolean validate(Object value);
+
+	public String getDbType() {
+		return dbType;
+	}
+
+	public void setDbType(String dbType) {
+		this.dbType = dbType;
+	}
 
 	public String getFieldKey() {
 		return fieldKey;

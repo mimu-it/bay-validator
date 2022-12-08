@@ -215,9 +215,9 @@ public class ValidatorEngineTest {
         ValidatorEngine.INSTANCE.init("value_rules_enum_output_test.yml");
 
         String packageName = "com.baymax.pvg2.values";
-        String sourceFormated = ValidatorEngine.INSTANCE.generateJavaEnumCode(packageName);
+        String sourceFormat = ValidatorEngine.INSTANCE.generateJavaEnumCode(packageName);
         ValidatorEngine.INSTANCE.writeToFile("ValueEnumRange",
-                packageName, sourceFormated, true);
+                packageName, sourceFormat, true);
 
         try {
             String fullClassName = packageName + ".ValueEnumRange";
@@ -752,7 +752,7 @@ public class ValidatorEngineTest {
 
     @Test
     public void testValidateBean() {
-        ValidatorEngine.INSTANCE.init("value_rules.yml",
+        ValidatorEngine.INSTANCE.init("mysql", "value_rules.yml",
                 null, new HashSet<String>() {{
                     add("id");
                     add("version");

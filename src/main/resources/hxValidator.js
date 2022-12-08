@@ -99,6 +99,10 @@ HxValidator.prototype = {
         /** 是否是中文字符 */
         isChineseCharacter: function(c) {
             return (c.charCodeAt(0) > 255);
+        },
+        /** 是否是空字符串 */
+        isBlank: function (value) {
+            return(value == undefined || value == null || value.trim() == '');
         }
     },
     validate: function(key, value) {
@@ -191,9 +195,8 @@ HxValidator.prototype = {
         let stringLengthMin = config.stringLengthMin;
         let stringLengthMax = config.stringLengthMax;
 
-        if(stringCharset == undefined || stringLengthMin == undefined
-        || stringLengthMax == undefined) {
-            kit.debug("stringCharset: " + stringCharset + ", stringLengthMin: " + stringLengthMin
+        if(stringLengthMin == undefined || stringLengthMax == undefined) {
+            this.kit.debug("stringCharset: " + stringCharset + ", stringLengthMin: " + stringLengthMin
             + ", stringLengthMax:" + stringLengthMax);
             return "字符串长度校验规则不完整";
         }
@@ -218,41 +221,59 @@ HxValidator.prototype = {
          *     字节数 : 2;编码：UTF-16LE
          */
         let strLength = 0;
-        for(let i = 0; i < value.length; i++) {
-            let c = value.charAt(i);
-            if(!kit.isChineseCharacter(c)) {
-                /** 非中文 */
-                if(kit.contains(["GB2312", "GBK", "GB18030", "ISO-8859-1", "UTF-8", "utf8"], stringCharset)) {
-                    strLength ++;
-                }
-                else if(kit.contains(["UTF-16"], stringCharset)) {
-                    strLength = strLength + 4;
-                }
-                else if(kit.contains(["UTF-16BE", "UTF-16LE"], stringCharset)) {
-                    strLength = strLength + 2;
-                }
-
-                continue;
+        if(value == undefined || value == null) {
+            /**
+             * value值需要考虑这种情况
+             */
+            if(stringLengthMin <= strLength && strLength <= stringLengthMax) {
+                return "";
             }
-            else {
-                /** 中文 */
-                if(kit.contains(["GB2312", "GBK", "GB18030", "UTF-16BE", "UTF-16LE"], stringCharset)) {
-                    strLength = strLength + 2;
+            return "参数字符长度不符合规则";
+        }
+
+        if(this.kit.isBlank(stringCharset)) {
+            /**
+             * mysql采用这种方式
+             */
+            strLength = value.length;
+        }
+        else {
+            for(let i = 0; i < value.length; i++) {
+                let c = value.charAt(i);
+                if(!kit.isChineseCharacter(c)) {
+                    /** 非中文 */
+                    if(kit.contains(["GB2312", "GBK", "GB18030", "ISO-8859-1", "UTF-8", "utf8"], stringCharset)) {
+                        strLength ++;
+                    }
+                    else if(kit.contains(["UTF-16"], stringCharset)) {
+                        strLength = strLength + 4;
+                    }
+                    else if(kit.contains(["UTF-16BE", "UTF-16LE"], stringCharset)) {
+                        strLength = strLength + 2;
+                    }
+
+                    continue;
                 }
-                else if(kit.contains(["ISO-8859-1"], stringCharset)) {
-                    strLength ++;
-                }
-                else if(kit.contains(["UTF-8", "utf8"], stringCharset)) {
-                    strLength = strLength + 3;
-                }
-                else if(kit.contains(["UTF-16"], stringCharset)) {
-                    strLength = strLength + 4;
+                else {
+                    /** 中文 */
+                    if(kit.contains(["GB2312", "GBK", "GB18030", "UTF-16BE", "UTF-16LE"], stringCharset)) {
+                        strLength = strLength + 2;
+                    }
+                    else if(kit.contains(["ISO-8859-1"], stringCharset)) {
+                        strLength ++;
+                    }
+                    else if(kit.contains(["UTF-8", "utf8"], stringCharset)) {
+                        strLength = strLength + 3;
+                    }
+                    else if(kit.contains(["UTF-16"], stringCharset)) {
+                        strLength = strLength + 4;
+                    }
+
+                    continue;
                 }
 
-                continue;
+                throw "字符类型不明，字符:" + c;
             }
-
-            throw "字符类型不明，字符:" + c;
         }
 
         kit.debug("stringLengthMin: " + stringLengthMin);

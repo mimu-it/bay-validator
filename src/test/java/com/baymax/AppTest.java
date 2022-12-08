@@ -43,10 +43,7 @@ public class AppTest
 
         Map<String, Object> map = BeanUtil.getPropertyByIntrospector(rule);
         System.out.println(map);
-        Assert.assertEquals("{stringCharset=utf8, fieldKey=common.id, " +
-                "stringLengthMin=1, stringRegexKey=null, numericMin=null, type=String, " +
-                "class=class com.baymax.validator.engine.model.sub.StringRegexFieldRule, " +
-                "decimalMin=null, numericMax=null, decimalMax=null, enumValues=null, stringLengthMax=128}",
+        Assert.assertEquals("{stringCharset=utf8, fieldKey=common.id, dbType=null, stringRegexKey=null, numericMin=null, type=String, decimalMax=null, stringLengthMax=128, stringLengthMin=1, class=class com.baymax.validator.engine.model.sub.StringRegexFieldRule, decimalMin=null, numericMax=null, enumValues=null}",
                 map.toString());
 
 
@@ -56,7 +53,7 @@ public class AppTest
 
         map = BeanUtil.beanToMap(rule);
         System.out.println(map);
-        Assert.assertEquals("{fieldKey=common.id, type=String, " +
+        Assert.assertEquals("{dbType=null, fieldKey=common.id, type=String, " +
                 "numericMin=null, numericMax=null, decimalMin=null, decimalMax=null, " +
                 "stringCharset=utf8, stringRegexKey=null, stringLengthMin=1, " +
                 "stringLengthMax=128, enumValues=null}", map.toString());

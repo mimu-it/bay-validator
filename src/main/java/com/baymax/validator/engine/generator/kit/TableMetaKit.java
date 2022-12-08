@@ -29,14 +29,14 @@ public class TableMetaKit {
 	 * @return
 	 * @throws SQLException
 	 */
-	public static List<String> getTables(DataSource dataSource, List<String> exceptTables) {
+	public static List<String> getTables(DataSource dataSource, String databaseName, List<String> exceptTables) {
 		try {
 			Connection conn = dataSource.getConnection();
 			DatabaseMetaData dbMetData = conn.getMetaData();
 			// mysql convertDatabaseCharsetType null
-			ResultSet rs = dbMetData.getTables(null, null, null, new String[] { "TABLE", "VIEW" });
+			ResultSet rs = dbMetData.getTables(databaseName, null, null, new String[] { "TABLE", "VIEW" });
 			
-			List<String> tables = new ArrayList<String>();
+			List<String> tables = new ArrayList<>();
 			while (rs.next()) {
 				if (rs.getString(4) != null
 						&& (rs.getString(4).equalsIgnoreCase("TABLE") || rs
@@ -99,11 +99,12 @@ public class TableMetaKit {
                 String columnName = metaData.getColumnLabel(i + 1);
                 String originClass = metaData.getColumnClassName(i + 1);
                 String columnDbType = metaData.getColumnTypeName(i + 1);
+                int displaySize = metaData.getColumnDisplaySize(i + 1);
                 
                 //通过字段名获取数据
                 System.out.println(String.format("getColumnsMeta() => Table's name is: %s", tableName));
-                System.out.println("COLUMN: " + columnName + ", CLASS: " 
-                + originClass + ", DBTYPE:" + columnDbType);
+				System.out.println(String.format("COLUMN: %s, DISPLAY_SIZE: %s, CLASS: %s, DB_TYPE: %s",
+						columnName, displaySize, originClass, columnDbType));
                 
                 String abbreviationClass = "";
 
@@ -136,6 +137,7 @@ public class TableMetaKit {
                 
                 ColumnMeta oColumnMeta = new ColumnMeta();
                 oColumnMeta.setName(columnName);
+				oColumnMeta.setDisplaySize(displaySize);
                 oColumnMeta.setAbbreviationClass(abbreviationClass);
                 oColumnMeta.setOriginClass(originClass);
                 

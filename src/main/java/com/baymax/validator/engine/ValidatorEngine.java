@@ -3,12 +3,15 @@ package com.baymax.validator.engine;
 import com.baymax.App;
 import com.baymax.validator.engine.generator.JavaEnum;
 import com.baymax.validator.engine.generator.JavaEnumTemplateRender;
+import com.baymax.validator.engine.generator.kit.TableMetaKit;
+import com.baymax.validator.engine.generator.meta.ColumnMeta;
+import com.baymax.validator.engine.generator.meta.TableMeta;
 import com.baymax.validator.engine.model.FieldRule;
 import com.baymax.validator.engine.model.sub.*;
 import com.baymax.validator.engine.utils.BeanUtil;
 import com.baymax.validator.engine.utils.FileWriter;
-import com.baymax.validator.engine.utils.NameUtils;
-import com.baymax.validator.engine.utils.ParamUtils;
+import com.baymax.validator.engine.utils.NameUtil;
+import com.baymax.validator.engine.utils.ParamUtil;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -20,9 +23,9 @@ import org.apache.commons.lang3.time.DateFormatUtils;
 import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
 
-import org.yaml.snakeyaml.introspector.PropertyUtils;
 import org.yaml.snakeyaml.nodes.Tag;
 
+import javax.sql.DataSource;
 import java.beans.BeanInfo;
 import java.beans.Introspector;
 import java.beans.PropertyDescriptor;
@@ -35,8 +38,9 @@ import java.math.BigInteger;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.sql.Connection;
+import java.sql.SQLException;
 import java.util.*;
-import java.util.function.Function;
 
 /**
  * @author xiao.hu
@@ -53,6 +57,14 @@ public enum ValidatorEngine {
 	INSTANCE;
 
 	private static ObjectMapper mapper = new ObjectMapper();
+
+	/**
+	 * 数据库类型，不同类型对于字段长度的校验是有区别的
+	 */
+	enum DbType {
+		mysql,
+		oracle
+	}
 
 	/**
 	 * yml文件的规则键值
@@ -101,6 +113,24 @@ public enum ValidatorEngine {
 	private boolean useSnake = true;
 
 	/**
+	 * 默认数据库类型是mysql
+	 */
+	private static DbType dbType = null;
+
+	public static DbType getDbType() {
+		return dbType;
+	}
+
+	public static void initDbType(String dbTypeName) {
+		if(DbType.oracle.name().equals(dbTypeName)) {
+			dbType = DbType.oracle;
+		}
+		else {
+			dbType = DbType.mysql;
+		}
+	}
+
+	/**
 	 * 可被自定义
 	 */
 	private static Set<String> ignoreKeys = new HashSet<>();
@@ -112,6 +142,10 @@ public enum ValidatorEngine {
 		ignoreKeys.add("modifier");
 		ignoreKeys.add("is_deleted");
 		ignoreKeys.add("version");
+	}
+
+	public static boolean containIgnoreKeys(String key) {
+		return ignoreKeys.contains(key);
 	}
 
 
@@ -145,7 +179,14 @@ public enum ValidatorEngine {
 	 *
 	 *   结构为 map -> map -> {String, Integer, ArrayList}
 	 */
+	public void init0(String dbType, String valueRulesYmlFilePath) {
+		initDbType(dbType);
+		RegexDict.INSTANCE.init();
+		this.valueRulesMap = loadValueRulesYml(valueRulesYmlFilePath);
+	}
+
 	public void init(String valueRulesYmlFilePath) {
+		initDbType(DbType.mysql.name());
 		RegexDict.INSTANCE.init();
 		this.valueRulesMap = loadValueRulesYml(valueRulesYmlFilePath);
 	}
@@ -155,8 +196,8 @@ public enum ValidatorEngine {
 	 * @param valueRulesYmlFilePath
 	 * @param commonValueRulesYmlFilePath
 	 */
-	public void init(String valueRulesYmlFilePath, String commonValueRulesYmlFilePath) {
-		init(valueRulesYmlFilePath);
+	public void init(String dbType, String valueRulesYmlFilePath, String commonValueRulesYmlFilePath) {
+		init0(dbType, valueRulesYmlFilePath);
 		if(commonValueRulesYmlFilePath != null) {
 			this.commonValueRulesMap = loadValueRulesYml(commonValueRulesYmlFilePath);
 		}
@@ -167,12 +208,12 @@ public enum ValidatorEngine {
 	 * @param valueRulesYmlFilePath
 	 * @param commonValueRulesYmlFilePath
 	 */
-	public void init(String valueRulesYmlFilePath, String commonValueRulesYmlFilePath,
+	public void init(String dbType, String valueRulesYmlFilePath, String commonValueRulesYmlFilePath,
 					 Set<String> userIgnoreKeys, boolean customUseSnake) {
 		this.useSnake = customUseSnake;
 		ignoreKeys = userIgnoreKeys;
 		checkIgnoreKeysByUseSnake();
-		init(valueRulesYmlFilePath, commonValueRulesYmlFilePath);
+		init(dbType, valueRulesYmlFilePath, commonValueRulesYmlFilePath);
 	}
 
 	/**
@@ -180,12 +221,12 @@ public enum ValidatorEngine {
 	 * @param valueRulesYmlFilePath
 	 * @param userIgnoreKeys
 	 */
-	public void init(String valueRulesYmlFilePath, Set<String> userIgnoreKeys, boolean customUseSnake) {
+	public void init(String dbType, String valueRulesYmlFilePath, Set<String> userIgnoreKeys, boolean customUseSnake) {
 		this.useSnake = customUseSnake;
 		ignoreKeys = userIgnoreKeys;
 		checkIgnoreKeysByUseSnake();
-		RegexDict.INSTANCE.init();
-		this.valueRulesMap = loadValueRulesYml(valueRulesYmlFilePath);
+
+		init0(dbType, valueRulesYmlFilePath);
 	}
 
 
@@ -283,7 +324,7 @@ public enum ValidatorEngine {
 
 		while(ps.hasMoreElements()) {
 			URL url = ps.nextElement();
-			//System.out.println("valueRulesYmlFilePath url: " + url);
+
 			try (InputStream is = url.openStream()) {
 				/**
 				 *  读取所有输入,包括回车换行符
@@ -320,7 +361,7 @@ public enum ValidatorEngine {
 	 * @return
 	 */
 	public boolean isRuleExisted(String tableName, String fieldName) {
-		Map<String, Object> fieldsMap = (Map<String, Object>) this.valueRulesMap.get(tableName);
+		Map<String, Object> fieldsMap = this.valueRulesMap.get(tableName);
 		if(fieldsMap == null) {
 			return false;
 		}
@@ -416,14 +457,14 @@ public enum ValidatorEngine {
 		 * 因为假设numericMin为1时，yaml将其匹配为int型，而numericMax为大数，匹配为long型
 		 * 比较起来需要做类型转换，所以统一使用BigInteger类型进行全兼容
 		 */
-		BigInteger numericMin = ParamUtils.getBigInteger(rulesMap, RuleKey.numeric_min.name());
-		BigInteger numericMax = ParamUtils.getBigInteger(rulesMap, RuleKey.numeric_max.name());
+		BigInteger numericMin = ParamUtil.getBigInteger(rulesMap, RuleKey.numeric_min.name());
+		BigInteger numericMax = ParamUtil.getBigInteger(rulesMap, RuleKey.numeric_max.name());
 
 		/**
 		 * decimal的相关配置
 		 */
-		BigDecimal decimalMin = ParamUtils.getBigDecimal(rulesMap, RuleKey.decimal_min.name());
-		BigDecimal decimalMax = ParamUtils.getBigDecimal(rulesMap, RuleKey.decimal_max.name());
+		BigDecimal decimalMin = ParamUtil.getBigDecimal(rulesMap, RuleKey.decimal_min.name());
+		BigDecimal decimalMax = ParamUtil.getBigDecimal(rulesMap, RuleKey.decimal_max.name());
 
 		/**
 		 * string的相关配置
@@ -602,7 +643,7 @@ public enum ValidatorEngine {
 
 		String type = (String) ruleJson.get(RuleKey.type.name());
 		if(RuleType.isEnum(type)) {
-			return (List<Object>) ruleJson.get(NameUtils.lineToHump(RuleKey.enum_values.name()));
+			return (List<Object>) ruleJson.get(NameUtil.lineToHump(RuleKey.enum_values.name()));
 		}
 
 		return null;
@@ -680,7 +721,7 @@ public enum ValidatorEngine {
 					 * 可以使用驼峰或者下划线
 					 */
 					if(useSnake) {
-						name = NameUtils.humpToLine(name);
+						name = NameUtil.humpToLine(name);
 					}
 
 					Method method = propDesc.getReadMethod();
@@ -728,7 +769,7 @@ public enum ValidatorEngine {
 					}
 
 					String prefixName = prefix + "." + name;
-					boolean isOK = ValidatorEngine.INSTANCE.validate(prefixName, valueStr);
+					boolean isOK = INSTANCE.validate(prefixName, valueStr);
 					if (!isOK) {
 						errorKeys.add(name);
 					}
@@ -749,9 +790,9 @@ public enum ValidatorEngine {
 	 * @param packageName
 	 */
 	public String generateJavaEnumCode(String packageName) {
+		Engine.setFastMode(true);
 		Engine engine = Engine.use();
 		engine.setDevMode(true);
-		engine.setFastMode(true);
 		engine.setToClassPathSourceFactory();
 
 		if(this.valueRulesMap == null) {
@@ -825,6 +866,159 @@ public enum ValidatorEngine {
 		return formattedSource;
 	}
 
+
+	/**
+	 *
+	 * @param oldYmlPath
+	 * @param dataSource
+	 * @param exceptTables
+	 * @return
+	 * @throws SQLException
+	 */
+	public String generateDefaultYml(String oldYmlPath, DataSource dataSource, String databaseName, List<String> exceptTables)
+			throws SQLException {
+		List<String> tables = TableMetaKit.getTables(dataSource, databaseName, exceptTables);
+		if(tables == null || tables.isEmpty()) {
+			return "";
+		}
+
+		Engine ve = Engine.create("Huxiao.coder");
+
+		Map<String, TableMeta> tablesWithColumnMetaMapping = makeStringTableMetaMap(dataSource, tables);
+
+		List<FieldRule> list = new ArrayList<>();
+		Iterator<Map.Entry<String, TableMeta>> it = tablesWithColumnMetaMapping.entrySet().iterator();
+		while(it.hasNext()) {
+			Map.Entry<String, TableMeta> entry = it.next();
+			String tableName = entry.getKey();
+			TableMeta tableMeta = entry.getValue();
+
+			/**
+			 * columnName: is_deleted, clazzName:String
+			 * columnName: parent_id, clazzName:Long
+			 * columnName: name, clazzName:String
+			 * columnName: password, clazzName:String
+			 * columnName: name_cn, clazzName:String
+			 * columnName: user_number, clazzName:String
+			 * columnName: is_admin, clazzName:String
+			 * columnName: ticket, clazzName:String
+			 * columnName: version, clazzName:Integer
+			 */
+			List<ColumnMeta> columnMetaList =  tableMeta.getColumnMetaList();
+			for(ColumnMeta meta : columnMetaList) {
+				String columnName = meta.getName();
+				String clazzName = meta.getAbbreviationClass();
+				Integer displaySize = meta.getDisplaySize();
+
+				if(ignoreKeys.contains(columnName)) {
+					continue;
+				}
+
+				if(String.class.getSimpleName().equals(clazzName)
+						|| Date.class.getSimpleName().equals(clazzName)) {
+					makeAnyStringRule(list, tableName, columnName, displaySize);
+				}
+				else {
+					makeNumericRule(list, tableName, columnName, clazzName, displaySize);
+				}
+			}
+		}
+
+		return generateDefaultYml(oldYmlPath, list);
+	}
+
+	public static Map<String, TableMeta> makeStringTableMetaMap(DataSource dataSource, List<String> tables) throws SQLException {
+		Map<String, TableMeta> tablesWithColumnMetaMapping = new HashMap<>();
+		//连接不能在循环里面，不然有可能占用很多的链接
+		Connection con = dataSource.getConnection();
+		for(String tableName : tables) {
+			List<ColumnMeta> columnsMetaList = TableMetaKit.getColumnsMeta(con, tableName);
+			if(columnsMetaList == null || columnsMetaList.isEmpty()) {
+				continue;
+			}
+
+			TableMeta oTableMeta = new TableMeta();
+			oTableMeta.setTableName(tableName);
+			oTableMeta.setColumnMetaList(columnsMetaList);
+
+			tablesWithColumnMetaMapping.put(tableName, oTableMeta);
+		}
+		return tablesWithColumnMetaMapping;
+	}
+
+	/**
+	 *
+	 * @param list
+	 * @param tableName
+	 * @param columnName
+	 * @param clazzName
+	 * @param displaySize
+	 */
+	public static void makeNumericRule(List<FieldRule> list, String tableName,
+									   String columnName, String clazzName, Integer displaySize) {
+		if(displaySize == null) {
+			/**
+			 * 不必要取整型最大值
+			 */
+			displaySize = 9999;
+		}
+
+		if(Integer.class.getSimpleName().equals(clazzName)
+				|| Long.class.getSimpleName().equals(clazzName)) {
+			FieldRule fr = new NumericFieldRule();
+			fr.setFieldKey(tableName + "." + columnName);
+			fr.setType(RuleType.numeric.name());
+			fr.setNumericMin(new BigInteger("0"));
+			fr.setNumericMax(new BigInteger(String.valueOf(displaySize)));
+			list.add(fr);
+		}
+		else if(BigDecimal.class.getSimpleName().equals(clazzName)) {
+			FieldRule fr = new DecimalFieldRule();
+			fr.setFieldKey(tableName + "." + columnName);
+			fr.setType(RuleType.decimal.name());
+			fr.setDecimalMin(new BigDecimal("0.00"));
+			fr.setDecimalMax(new BigDecimal(String.valueOf(displaySize)));
+			list.add(fr);
+		}
+	}
+
+	/**
+	 * 指定字符串类型的规则
+	 *
+	 * mysql mariadb而言
+	 * 对于varchar类型的长度，"你好"和"nh"是一个概念，都是2
+	 * 对于varchar(2)这样的数据类型，不能插入’123’或者’你好吗’这样的字符串，
+	 * 但是可以插入’12’,’你好’这样的字符串，我们知道在utf8字符集下两个汉字占用6个字节的大小。
+	 *
+	 * 对于int(2)这样的数据 类型，是可以插入数字123的，但是最大不能超过int存储范围的最大值
+	 *
+	 * Oracle：
+	 * 1.      Varchar2的字段，保存汉字量是长度/3， 即 varchar2 (30) 的字段，必能保存10个汉字。
+	 * 2.      nvarchar2的字段，保存汉字是1：1的，即 nvarchar2 (30) 的字段，必能保存30个汉字。
+	 * @param list
+	 * @param tableName
+	 * @param columnName
+	 * @param displaySize
+	 */
+	public static void makeAnyStringRule(List<FieldRule> list, String tableName, String columnName, Integer displaySize) {
+		if(displaySize == null) {
+			displaySize = 128;
+		}
+
+		FieldRule rule = new StringRegexFieldRule();
+		rule.setFieldKey(tableName + "." + columnName);
+		rule.setStringRegexKey("any_string");
+		rule.setStringLengthMin(1);
+		rule.setStringLengthMax(displaySize);
+
+		if(getDbType() == DbType.oracle) {
+			rule.setStringCharset("utf8");
+		}
+
+		rule.setType(RuleType.string.name());
+		list.add(rule);
+	}
+
 	/**
 	 * yml读取到java中的是Map结构是：
 	 * "student" -> Map
@@ -841,7 +1035,7 @@ public enum ValidatorEngine {
 		/**
 		 * 读取旧配置文件中的已有配置
 		 */
-		this.valueRulesMap = this.loadValueRulesYml(oldYmlPath);
+		this.valueRulesMap = loadValueRulesYml(oldYmlPath);
 		Map<String, Map<String, Object>> oldConfigMap = this.valueRulesMap;
 
 		/**
@@ -896,7 +1090,7 @@ public enum ValidatorEngine {
 				if("fieldKey".equals(key)) {
 					continue;
 				}
-				ruleMap.put(NameUtils.humpToLine(key), val);
+				ruleMap.put(NameUtil.humpToLine(key), val);
 			}
 
 			fieldMap.put(fieldName, ruleMap);

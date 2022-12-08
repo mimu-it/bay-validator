@@ -4,7 +4,7 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.Map;
 
-public class ParamUtils {
+public class ParamUtil {
 
     /**
      * 从yml文件中获取参数配置值，转换成BigInteger

@@ -2,6 +2,7 @@ package com.baymax.validator.engine.model.sub;
 
 import com.baymax.validator.engine.RegexDict;
 import com.baymax.validator.engine.model.FieldRule;
+import com.baymax.validator.engine.utils.StrUtil;
 import org.apache.commons.lang3.StringUtils;
 
 import java.io.UnsupportedEncodingException;
@@ -25,14 +26,28 @@ public class StringRegexFieldRule extends FieldRule {
         Integer stringLengthMin = super.getStringLengthMin();
         Integer stringLengthMax = super.getStringLengthMax();
         if(StringUtils.isNotBlank(charset) && stringLengthMin != null && stringLengthMax != null) {
-            try {
-                int length = realVal.getBytes(charset).length;
+            if(StrUtil.isBlank(charset)) {
+                /**
+                 * charset 为空意味着是使用mysql的字段长度规则
+                 */
+                int length = realVal.length();
                 if(length > stringLengthMax || length < stringLengthMin) {
                     return false;
                 }
-            } catch (UnsupportedEncodingException e) {
-                e.printStackTrace();
-                return false;
+            }
+            else {
+                /**
+                 * charset 不为空意味着是需要使用byte验证字段长度规则
+                 */
+                try {
+                    int length = realVal.getBytes(charset).length;
+                    if(length > stringLengthMax || length < stringLengthMin) {
+                        return false;
+                    }
+                } catch (UnsupportedEncodingException e) {
+                    e.printStackTrace();
+                    return false;
+                }
             }
         }
 
