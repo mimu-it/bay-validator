@@ -1,0 +1,19 @@
+order:
+  status:
+    type: enum_numeric
+    enum_dict:
+      0: unpaid
+      1: cancel
+      2: paid
+      3: refund
+      4: received
+      5: refund_return
+      6: reject
+    enum_values:
+      - 0
+      - 1
+      - 2
+      - 3
+      - 4
+      - 5
+      - 6

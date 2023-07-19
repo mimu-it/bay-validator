@@ -16,11 +16,11 @@ public class BeanUtil {
     public static Map<String, Object> getPropertyByIntrospector(Object bean) {
         try {
             BeanInfo beanInfo = Introspector.getBeanInfo(bean.getClass());
-            PropertyDescriptor[] proDescrtptors = beanInfo.getPropertyDescriptors();
+            PropertyDescriptor[] proDescritptors = beanInfo.getPropertyDescriptors();
 
-            Map<String, Object> map = new HashMap<>(proDescrtptors.length);
-            if (proDescrtptors != null && proDescrtptors.length > 0) {
-                for (PropertyDescriptor propDesc : proDescrtptors) {
+            Map<String, Object> map = new HashMap<>(proDescritptors.length);
+            if (proDescritptors != null && proDescritptors.length > 0) {
+                for (PropertyDescriptor propDesc : proDescritptors) {
                     String property = propDesc.getName();
 
                     Method methodGetUserName = propDesc.getReadMethod();

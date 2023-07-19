@@ -5,9 +5,6 @@ package com.baymax.validator.engine.model;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
 /**
  * @author xiao.hu
@@ -25,9 +22,18 @@ public abstract class FieldRule {
 	private String stringRegexKey = null;
 	private Integer stringLengthMin = null;
 	private Integer stringLengthMax = null;
-	private List<Object> enumValues = null;
 
-	public abstract boolean validate(Object value);
+	/** Object 可能是 String,  此时需要引用 common_dict 中的值
+	 * 也可能是 List<Object>
+	 */
+	private Object enumValues = null;
+
+	/** Object 可能是 String,  此时需要引用 common_dict 中的值
+	 * 也可能是 Map<Object, String>
+	 */
+	private Object enumDict = null;
+
+	public abstract boolean validate(String value);
 
 	public String getDbType() {
 		return dbType;
@@ -117,11 +123,19 @@ public abstract class FieldRule {
 		this.stringLengthMax = stringLengthMax;
 	}
 
-	public List<Object> getEnumValues() {
+	public Object getEnumValues() {
 		return enumValues;
 	}
 
-	public void setEnumValues(List<Object> enumValues) {
+	public void setEnumValues(Object enumValues) {
 		this.enumValues = enumValues;
+	}
+
+	public Object getEnumDict() {
+		return enumDict;
+	}
+
+	public void setEnumDict(Object enumDict) {
+		this.enumDict = enumDict;
 	}
 }

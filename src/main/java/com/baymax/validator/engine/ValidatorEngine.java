@@ -1,8 +1,10 @@
 package com.baymax.validator.engine;
 
 import com.baymax.App;
+import com.baymax.validator.engine.constant.Const;
 import com.baymax.validator.engine.generator.JavaEnum;
 import com.baymax.validator.engine.generator.JavaEnumTemplateRender;
+import com.baymax.validator.engine.generator.formatter.IFormatter;
 import com.baymax.validator.engine.generator.kit.TableMetaKit;
 import com.baymax.validator.engine.generator.meta.ColumnMeta;
 import com.baymax.validator.engine.generator.meta.TableMeta;
@@ -15,7 +17,6 @@ import com.baymax.validator.engine.utils.ParamUtil;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.googlejavaformat.java.FormatterException;
 import com.jfinal.kit.Kv;
 import com.jfinal.template.Engine;
 import org.apache.commons.lang3.StringUtils;
@@ -58,18 +59,19 @@ public enum ValidatorEngine {
 
 	private static ObjectMapper mapper = new ObjectMapper();
 
-	/**
-	 * 数据库类型，不同类型对于字段长度的校验是有区别的
-	 */
 	enum DbType {
+		/**
+		 * 数据库类型，不同类型对于字段长度的校验是有区别的
+		 */
 		mysql,
 		oracle
 	}
 
-	/**
-	 * yml文件的规则键值
-	 */
+
 	enum RuleKey {
+		/**
+		 * yml文件的规则键值
+		 */
 		type,
 		numeric_min,
 		numeric_max,
@@ -79,13 +81,14 @@ public enum ValidatorEngine {
 		string_regex_key,
 		string_length_min,
 		string_length_max,
-		enum_values
+		enum_values,
+		enum_dict
 	}
 
-	/**
-	 * yml校验规则的类型
-	 */
 	public enum RuleType {
+		/**
+		 * yml校验规则的类型
+		 */
 		numeric,
 		decimal,
 		string,
@@ -108,9 +111,9 @@ public enum ValidatorEngine {
 
 	/**
 	 * 决定键校验时使用驼峰还是下划线模式
-	 * @param useSnake
+	 * @param isSnakeKeyMode
 	 */
-	private boolean useSnake = true;
+	private boolean isSnakeKeyMode = true;
 
 	/**
 	 * 默认数据库类型是mysql
@@ -148,6 +151,14 @@ public enum ValidatorEngine {
 		return ignoreKeys.contains(key);
 	}
 
+	/**
+	 * 代码格式化插件
+	 */
+	private IFormatter formatter = null;
+
+	public void setFormatter(IFormatter formatter) {
+		this.formatter = formatter;
+	}
 
 	/**
 	 * {{ 入口方法 }}
@@ -179,15 +190,21 @@ public enum ValidatorEngine {
 	 *
 	 *   结构为 map -> map -> {String, Integer, ArrayList}
 	 */
-	public void init0(String dbType, String valueRulesYmlFilePath) {
+	public void init0(String dbType, String valueRulesYmlFilePath, String regexDictYmlFilePath) {
 		initDbType(dbType);
-		RegexDict.INSTANCE.init();
+		CommonDict.INSTANCE.init(regexDictYmlFilePath);
 		this.valueRulesMap = loadValueRulesYml(valueRulesYmlFilePath);
 	}
 
 	public void init(String valueRulesYmlFilePath) {
 		initDbType(DbType.mysql.name());
-		RegexDict.INSTANCE.init();
+		CommonDict.INSTANCE.init("");
+		this.valueRulesMap = loadValueRulesYml(valueRulesYmlFilePath);
+	}
+
+	public void init(String valueRulesYmlFilePath, String regexDictYmlFilePath) {
+		initDbType(DbType.mysql.name());
+		CommonDict.INSTANCE.init(regexDictYmlFilePath);
 		this.valueRulesMap = loadValueRulesYml(valueRulesYmlFilePath);
 	}
 
@@ -196,8 +213,9 @@ public enum ValidatorEngine {
 	 * @param valueRulesYmlFilePath
 	 * @param commonValueRulesYmlFilePath
 	 */
-	public void init(String dbType, String valueRulesYmlFilePath, String commonValueRulesYmlFilePath) {
-		init0(dbType, valueRulesYmlFilePath);
+	public void init(String dbType, String valueRulesYmlFilePath,
+					 String commonValueRulesYmlFilePath, String regexDictYmlFilePath) {
+		init0(dbType, valueRulesYmlFilePath, regexDictYmlFilePath);
 		if(commonValueRulesYmlFilePath != null) {
 			this.commonValueRulesMap = loadValueRulesYml(commonValueRulesYmlFilePath);
 		}
@@ -209,11 +227,12 @@ public enum ValidatorEngine {
 	 * @param commonValueRulesYmlFilePath
 	 */
 	public void init(String dbType, String valueRulesYmlFilePath, String commonValueRulesYmlFilePath,
+					 String regexDictYmlFilePath,
 					 Set<String> userIgnoreKeys, boolean customUseSnake) {
-		this.useSnake = customUseSnake;
+		this.isSnakeKeyMode = customUseSnake;
 		ignoreKeys = userIgnoreKeys;
 		checkIgnoreKeysByUseSnake();
-		init(dbType, valueRulesYmlFilePath, commonValueRulesYmlFilePath);
+		init(dbType, valueRulesYmlFilePath, commonValueRulesYmlFilePath, regexDictYmlFilePath);
 	}
 
 	/**
@@ -221,12 +240,13 @@ public enum ValidatorEngine {
 	 * @param valueRulesYmlFilePath
 	 * @param userIgnoreKeys
 	 */
-	public void init(String dbType, String valueRulesYmlFilePath, Set<String> userIgnoreKeys, boolean customUseSnake) {
-		this.useSnake = customUseSnake;
+	public void init(String dbType, String valueRulesYmlFilePath, String regexDictYmlFilePath,
+					 Set<String> userIgnoreKeys, boolean customUseSnake) {
+		this.isSnakeKeyMode = customUseSnake;
 		ignoreKeys = userIgnoreKeys;
 		checkIgnoreKeysByUseSnake();
 
-		init0(dbType, valueRulesYmlFilePath);
+		init0(dbType, valueRulesYmlFilePath, regexDictYmlFilePath);
 	}
 
 
@@ -235,7 +255,7 @@ public enum ValidatorEngine {
 	 */
 	private void checkIgnoreKeysByUseSnake() {
 		for(String key : ignoreKeys) {
-			if(this.useSnake) {
+			if(this.isSnakeKeyMode) {
 				char[] chars = key.toCharArray();
 				for(char s : chars) {
 					if(Character.isUpperCase(s)) {
@@ -473,7 +493,12 @@ public enum ValidatorEngine {
 		String stringRegexKey = (String) rulesMap.get(RuleKey.string_regex_key.name());
 		Integer stringLengthMin = (Integer) rulesMap.get(RuleKey.string_length_min.name());
 		Integer stringLengthMax = (Integer) rulesMap.get(RuleKey.string_length_max.name());
-		List<Object> enumValuesList = getEnumValues(rulesMap);
+
+		/**
+		 * enum的相关配置
+		 */
+		List<Object> enumValuesList = this.getEnumValues(rulesMap);
+		Map<Object, String> enumDict = this.getEnumDict(rulesMap);
 
 		/**
 		 * 工厂方法
@@ -512,17 +537,19 @@ public enum ValidatorEngine {
 			return fr;
 		}
 		else if(RuleType.enum_numeric.name().equals(type)) {
-			FieldRule fr = new EnumNumericFieldRule<BigInteger>();
+			FieldRule fr = new EnumNumericFieldRule<>(BigInteger.class);
 			fr.setFieldKey(fieldKey);
 			fr.setType(type);
 			fr.setEnumValues(enumValuesList);
+			fr.setEnumDict(enumDict);
 			return fr;
 		}
 		else if(RuleType.enum_decimal.name().equals(type)) {
-			FieldRule fr = new EnumNumericFieldRule<BigDecimal>();
+			FieldRule fr = new EnumNumericFieldRule<>(BigDecimal.class);
 			fr.setFieldKey(fieldKey);
 			fr.setType(type);
 			fr.setEnumValues(enumValuesList);
+			fr.setEnumDict(enumDict);
 			return fr;
 		}
 
@@ -536,9 +563,23 @@ public enum ValidatorEngine {
 			enumValuesList = (List<Object>) enumValues;
 		}
 		else if(enumValues instanceof String) {
-			enumValuesList = RegexDict.INSTANCE.getList((String) enumValues);
+			enumValuesList = CommonDict.INSTANCE.getList((String) enumValues);
 		}
 		return enumValuesList;
+	}
+
+
+	/**
+	 * 对于 number 类型的枚举值，可以在 enum_dict 中配置转义字典
+	 * @param rulesMap
+	 * @return
+	 */
+	private Map<Object, String> getEnumDict(Map<String, Object> rulesMap) {
+		Object enumDict = rulesMap.get(RuleKey.enum_dict.name());
+		if(enumDict instanceof Map) {
+			return (Map<Object, String>) enumDict;
+		}
+		return null;
 	}
 
 
@@ -595,7 +636,7 @@ public enum ValidatorEngine {
             }
 
             String regexKey = fieldRule.getStringRegexKey();
-            String regexStr = RegexDict.INSTANCE.getRegex(regexKey);
+            String regexStr = (String) CommonDict.INSTANCE.getRule(regexKey);
             if(StringUtils.isBlank(regexStr)) {
                 throw new IllegalStateException(String.format("regex is blank, regexKey is %s", regexKey));
             }
@@ -663,7 +704,7 @@ public enum ValidatorEngine {
 				throw new IllegalStateException(String.format("No field(%s) rule found", validatorKey));
 			}
 		}
-		return fr.validate(paramValue);
+		return fr.validate(String.valueOf(paramValue));
 	}
 
 
@@ -720,7 +761,7 @@ public enum ValidatorEngine {
 					/**
 					 * 可以使用驼峰或者下划线
 					 */
-					if(useSnake) {
+					if(isSnakeKeyMode) {
 						name = NameUtil.humpToLine(name);
 					}
 
@@ -832,38 +873,38 @@ public enum ValidatorEngine {
 					continue;
 				}
 
-
-				//List<Object> enumValues = (List<Object>) fieldRuleMap.get(RuleKey.enum_values.name());
 				List<Object> enumValues = this.getEnumValues(fieldRuleMap);
+				Map<Object, String> enumDict = this.getEnumDict(fieldRuleMap);
 
-				JavaEnum je = JavaEnumTemplateRender.build(fieldName, type, enumValues);
+				JavaEnum je = JavaEnumTemplateRender.build(fieldName, type, enumValues, enumDict);
 				importList.add("import " + je.getCanonicalJavaType());
 
-				Kv cond = Kv.by("fieldName", fieldName)
-						.set("enumValues", je.getEnumValues())
-						.set("javaType", je.getJavaType());
-				String template = engine.getTemplate("EnumFieldRule.enjoy").renderToString(cond);
+				Kv cond = Kv.by(Const.TemplateKey.fieldName.name(), fieldName)
+						.set(Const.TemplateKey.enumValues.name(), je.getEnumValues())
+						.set(Const.TemplateKey.javaType.name(), je.getJavaType());
+				String template = engine.getTemplate(Const.ENUM_FIELD_RULE_FILENAME).renderToString(cond);
 				//System.out.println(template);
 				fieldRuleTemplateList.add(template);
 			}
 
 
-			Kv cond = Kv.by("tableName", tableName).set("fieldRuleList", fieldRuleTemplateList);
-			String tableTemplate = engine.getTemplate("Table.enjoy").renderToString(cond);
+			Kv cond = Kv.by(Const.TemplateKey.tableName.name(), tableName)
+					.set(Const.TemplateKey.fieldRuleList.name(), fieldRuleTemplateList);
+			String tableTemplate = engine.getTemplate(Const.TABLE_FILENAME).renderToString(cond);
 			// System.out.println(tableTemplate);
 			tableTemplateList.add(tableTemplate);
 		}
 
 		String importStr = StringUtils.join(importList, ";") + ";";
-		Kv cond = Kv.by("tableList", tableTemplateList)
+		Kv cond = Kv.by(Const.TemplateKey.tableList.name(), tableTemplateList)
 				.set("package", packageName)
 				.set("import", importStr)
-				.set("generateTime", DateFormatUtils.format(new Date(), "yyyy-MM-dd HH:mm:ss"));
-		String valueRangeTemplate = engine.getTemplate("ValueEnumRange.enjoy").renderToString(cond);
+				.set(Const.TemplateKey.generateTime.name(), DateFormatUtils.format(new Date(), "yyyy-MM-dd HH:mm:ss"));
+		String valueRangeTemplate = engine.getTemplate(Const.VALUE_ENUM_RANGE_FILENAME).renderToString(cond);
 
-		String formattedSource = formatJava(valueRangeTemplate);
-		System.out.println(formattedSource);
-		return formattedSource;
+		String formatSource = formatJava(valueRangeTemplate);
+		System.out.println(formatSource);
+		return formatSource;
 	}
 
 
@@ -1157,9 +1198,14 @@ public enum ValidatorEngine {
 	 * @return
 	 */
 	public String formatJava(String valueRangeTemplate) {
+		if(formatter == null) {
+			/** 没有设置格式化插件就直接原样返回 */
+			return valueRangeTemplate;
+		}
+
 		try {
-			return new com.google.googlejavaformat.java.Formatter().formatSource(valueRangeTemplate);
-		} catch (FormatterException e) {
+			return formatter.formatJava(valueRangeTemplate);
+		} catch (Exception e) {
 			e.printStackTrace();
 		}
 
@@ -1178,7 +1224,7 @@ public enum ValidatorEngine {
 	 * engine/
 	 */
 	public void writeToFile(String fileName, String packageName, String content, boolean toSrcTest) {
-		/// Volumes/HD-FOR-MAC/DEV_ENV/projects/webApp/workspace_for_maven/law-doc-parent/law-doc-validator/target/classes/
+		// /Volumes/HD-FOR-MAC/DEV_ENV/projects/webApp/workspace_for_maven/law-doc-parent/law-doc-validator/target/classes/
 		String targetClassesPath = this.getClass().getProtectionDomain().getCodeSource().getLocation().getPath();
 		String srcPath = toSrcTest ? targetClassesPath + "../../src/test/java"
 				: targetClassesPath + "../../src/main/java";
@@ -1187,9 +1233,9 @@ public enum ValidatorEngine {
 		//System.out.println(packagePath);
 
 		if(toSrcTest) {
-			FileWriter.write(srcPath + packagePath, fileName, "java", content);
+			FileWriter.write(srcPath + packagePath, fileName, Const.FileType.java.name(), content);
 		} else {
-			FileWriter.backupAndWrite(srcPath + packagePath, fileName, "java", content);
+			FileWriter.backupAndWrite(srcPath + packagePath, fileName, Const.FileType.java.name(), content);
 		}
 	}
 
@@ -1198,10 +1244,12 @@ public enum ValidatorEngine {
 	 * @param filePath
 	 */
 	public void publishHxValidatorJS(String filePath) {
-		String path = Thread.currentThread().getContextClassLoader().getResource("hxValidator.js").getPath();//得到配置文件路径
+		//得到配置文件路径
+		String path = Thread.currentThread().getContextClassLoader()
+				.getResource(Const.HX_VALIDATOR + "." + Const.FileType.js.name()).getPath();
 		try {
 			String content = new String(Files.readAllBytes(Paths.get(path)));
-			FileWriter.write(filePath, "hxValidator", "js", content);
+			FileWriter.write(filePath, Const.HX_VALIDATOR, Const.FileType.js.name(), content);
 		} catch (IOException e) {
 			throw new IllegalStateException(e);
 		}

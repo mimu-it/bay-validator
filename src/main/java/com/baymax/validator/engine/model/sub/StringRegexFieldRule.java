@@ -1,6 +1,6 @@
 package com.baymax.validator.engine.model.sub;
 
-import com.baymax.validator.engine.RegexDict;
+import com.baymax.validator.engine.CommonDict;
 import com.baymax.validator.engine.model.FieldRule;
 import com.baymax.validator.engine.utils.StrUtil;
 import org.apache.commons.lang3.StringUtils;
@@ -10,14 +10,14 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- *
+ * @author xiao.hu
+ * @date 2022-03-30
+ * @apiNote
  */
 public class StringRegexFieldRule extends FieldRule {
 
     @Override
-    public boolean validate(Object value) {
-        String realVal = (String) value;
-
+    public boolean validate(String realVal) {
         /**
          * 验证字符串长度是否符合规范
          * 如果没有配置，则默认符合长度规范
@@ -45,7 +45,6 @@ public class StringRegexFieldRule extends FieldRule {
                         return false;
                     }
                 } catch (UnsupportedEncodingException e) {
-                    e.printStackTrace();
                     return false;
                 }
             }
@@ -56,10 +55,10 @@ public class StringRegexFieldRule extends FieldRule {
          */
         String regexDictKey = super.getStringRegexKey();
         if(StringUtils.isBlank(regexDictKey)) {
-            throw new IllegalStateException(String.format("regex dict key '%s' is null", regexDictKey));
+            throw new IllegalStateException(String.format("common dict key '%s' is null", regexDictKey));
         }
 
-        String regexStr = RegexDict.INSTANCE.getRegex(regexDictKey);
+        String regexStr = (String) CommonDict.INSTANCE.getRule(regexDictKey);
         Pattern pattern = Pattern.compile(regexStr);
         Matcher matcher = pattern.matcher(realVal);
         // 字符串是否与正则表达式相匹配

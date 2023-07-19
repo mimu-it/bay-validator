@@ -1,0 +1,5 @@
+order:
+  status:
+    type: enum_numeric
+    enum_dict: order_status_dict
+    enum_values: order_status

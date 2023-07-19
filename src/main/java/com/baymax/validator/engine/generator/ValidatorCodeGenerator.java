@@ -1,11 +1,13 @@
 package com.baymax.validator.engine.generator;
 
 import com.baymax.validator.engine.ValidatorEngine;
+import com.baymax.validator.engine.constant.Const;
 import com.baymax.validator.engine.generator.kit.TableMetaKit;
 import com.baymax.validator.engine.generator.meta.ColumnMeta;
 import com.baymax.validator.engine.generator.meta.TableMeta;
 import com.baymax.validator.engine.model.FieldRule;
 import com.baymax.validator.engine.utils.FileWriter;
+import com.baymax.validator.engine.utils.StrUtil;
 
 import javax.sql.DataSource;
 import java.io.File;
@@ -25,7 +27,15 @@ public class ValidatorCodeGenerator {
      */
     public static void generateValidatorConfig(String dbType, DataSource dataSource, String databaseName, List<String> exceptTables,
                                                String targetClassesPath,
-                                               String packageName, String classFileName) throws SQLException {
+                                               String packageName, String classFileName,
+                                               Set<String> userIgnoreKeys, boolean customUseSnake,
+                                               String valueRulesDirectory) throws SQLException {
+
+        String oldValueRulesYmlFilePath = valueRulesDirectory + File.separator + Const.VALUE_RULES_FILENAME;
+        String regexDictYmlFilePath = valueRulesDirectory + File.separator + Const.COMMON_DICT_FILENAME;
+        ValidatorEngine.INSTANCE.init(dbType, oldValueRulesYmlFilePath, regexDictYmlFilePath, userIgnoreKeys, customUseSnake);
+
+
         List<String> tables = TableMetaKit.getTables(dataSource, databaseName, exceptTables);
         if(tables == null || tables.isEmpty()) {
             return;
@@ -72,14 +82,19 @@ public class ValidatorCodeGenerator {
             }
         }
 
-        String newValueRulesYmlStr = ValidatorEngine.INSTANCE.generateDefaultYml("value_rules.yml", list);
+        if(StrUtil.isBlank(valueRulesDirectory)) {
+            valueRulesDirectory = "";
+        }
+
+
+        String newValueRulesYmlStr = ValidatorEngine.INSTANCE.generateDefaultYml(oldValueRulesYmlFilePath, list);
         System.out.println(newValueRulesYmlStr);
 
-        String srcResourcesPath = targetClassesPath + "../../src/main/resources";
+        String srcResourcesPath = targetClassesPath + "../../src/main/resources/" + valueRulesDirectory;
 
-        FileWriter.backupAndWrite(srcResourcesPath, "value_rules", "yml", newValueRulesYmlStr);
+        String[] valueRulesFileNameArr = Const.VALUE_RULES_FILENAME.split("\\.");
+        FileWriter.backupAndWrite(srcResourcesPath, valueRulesFileNameArr[0], valueRulesFileNameArr[1], newValueRulesYmlStr);
 
-        ValidatorEngine.INSTANCE.init0(dbType, "value_rules.yml");
         String sourceFormat = ValidatorEngine.INSTANCE.generateJavaEnumCode(packageName);
 
         String srcJavaPath = targetClassesPath + "../../src/main/java";

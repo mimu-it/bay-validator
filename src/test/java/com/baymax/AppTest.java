@@ -3,6 +3,7 @@ package com.baymax;
 import static org.junit.Assert.assertTrue;
 
 import com.baymax.validator.engine.ValidatorEngine;
+import com.baymax.validator.engine.constant.Const;
 import com.baymax.validator.engine.model.FieldRule;
 import com.baymax.validator.engine.model.sub.StringRegexFieldRule;
 import com.baymax.validator.engine.utils.BeanUtil;
@@ -43,7 +44,7 @@ public class AppTest
 
         Map<String, Object> map = BeanUtil.getPropertyByIntrospector(rule);
         System.out.println(map);
-        Assert.assertEquals("{stringCharset=utf8, fieldKey=common.id, dbType=null, stringRegexKey=null, numericMin=null, type=String, decimalMax=null, stringLengthMax=128, stringLengthMin=1, class=class com.baymax.validator.engine.model.sub.StringRegexFieldRule, decimalMin=null, numericMax=null, enumValues=null}",
+        Assert.assertEquals("{stringCharset=utf8, fieldKey=common.id, dbType=null, stringRegexKey=null, numericMin=null, type=String, decimalMax=null, stringLengthMax=128, stringLengthMin=1, enumDict=null, class=class com.baymax.validator.engine.model.sub.StringRegexFieldRule, decimalMin=null, numericMax=null, enumValues=null}",
                 map.toString());
 
 
@@ -56,7 +57,7 @@ public class AppTest
         Assert.assertEquals("{dbType=null, fieldKey=common.id, type=String, " +
                 "numericMin=null, numericMax=null, decimalMin=null, decimalMax=null, " +
                 "stringCharset=utf8, stringRegexKey=null, stringLengthMin=1, " +
-                "stringLengthMax=128, enumValues=null}", map.toString());
+                "stringLengthMax=128, enumValues=null, enumDict=null}", map.toString());
     }
 
     /**
@@ -85,7 +86,7 @@ public class AppTest
         InputStream is = null;
         Map<String, Object> map;
         try {
-            is = App.class.getClassLoader().getResourceAsStream("regex_dict.yml");
+            is = App.class.getClassLoader().getResourceAsStream(Const.COMMON_DICT_FILENAME);
             map = yaml.loadAs(is, Map.class);
         } finally {
             try {

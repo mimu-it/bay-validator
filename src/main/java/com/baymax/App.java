@@ -1,13 +1,9 @@
 package com.baymax;
 
 /**
- * Hello world!
- *
+ * @author xiao.hu
+ * @date 2023-07-12
+ * @apiNote
  */
-public class App 
-{
-    public static void main( String[] args )
-    {
-        System.out.println( "Hello World!" );
-    }
+public class App {
 }

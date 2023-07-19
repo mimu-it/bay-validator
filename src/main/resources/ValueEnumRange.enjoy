@@ -1,5 +1,6 @@
 package #(package);
 
+import java.io.Serializable;
 #(import)
 
 /**
@@ -7,7 +8,7 @@ package #(package);
  * create time:#(generateTime)
  * 
  */
-public final class ValueEnumRange {
+public final class ValueEnumRange implements Serializable {
 
 	#for(str : tableList)
    		#(str)

@@ -1,19 +1,30 @@
 package com.baymax.validator.engine.model.sub;
 
 import com.baymax.validator.engine.model.FieldRule;
+import com.baymax.validator.engine.utils.StrUtil;
 
 import java.math.BigInteger;
 
 /**
  * BigInteger 理论上能表示无限大的数
+ * @author xiao.hu
+ * @date 2022-03-30
+ * @apiNote
  */
 public class NumericFieldRule extends FieldRule {
 
     @Override
-    public boolean validate(Object value) {
-        if(value == null) { return false; }
+    public boolean validate(String value) {
+        if(!StrUtil.isNumber(value)) {
+            return false;
+        }
 
-        BigInteger realVal = new BigInteger(String.valueOf(value));
+        BigInteger realVal;
+        try {
+            realVal = new BigInteger(value);
+        } catch (Exception e) {
+            return false;
+        }
 
         Comparable<BigInteger> min = super.getNumericMin();
         Comparable<BigInteger> max = super.getNumericMax();

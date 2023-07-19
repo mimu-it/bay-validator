@@ -1,0 +1,9 @@
+_common:
+  id:
+    numeric_max: 9999999
+    numeric_min: 0
+    type: numeric
+  version:
+    numeric_max: 9999999
+    numeric_min: 0
+    type: numeric

@@ -1,6 +1,6 @@
 package com.baymax;
 
-import com.baymax.validator.engine.RegexDict;
+import com.baymax.validator.engine.CommonDict;
 import com.baymax.validator.engine.ValidatorEngine;
 import com.baymax.validator.engine.model.FieldRule;
 import com.baymax.validator.engine.model.sub.StringRegexFieldRule;
@@ -139,7 +139,7 @@ public class ValidatorEngineTest {
 
     @Test
     public void testValidateString() {
-        RegexDict.INSTANCE.init();
+        CommonDict.INSTANCE.init();
         ValidatorEngine.INSTANCE.init("value_rules.yml");
         boolean isOK_true = ValidatorEngine.INSTANCE.validate("student.phone_number", "15973166256");
         Assert.assertTrue(isOK_true);
@@ -191,7 +191,7 @@ public class ValidatorEngineTest {
 
     @Test
     public void testGetFieldValidatorRulesJsonStr() {
-        RegexDict.INSTANCE.init();
+        CommonDict.INSTANCE.init();
         ValidatorEngine.INSTANCE.init("value_rules.yml");
         String jsonStr = ValidatorEngine.INSTANCE.getFieldValidatorRulesJsonStr("student.game_long_card");
         System.out.println("testGetFieldValidatorRulesJsonStr => \n" + jsonStr);
@@ -218,6 +218,15 @@ public class ValidatorEngineTest {
         String sourceFormat = ValidatorEngine.INSTANCE.generateJavaEnumCode(packageName);
         ValidatorEngine.INSTANCE.writeToFile("ValueEnumRange",
                 packageName, sourceFormat, true);
+
+        try {
+            /**
+             * 也许文件还没编译到Target中，就开始了下面代码，所以这里休息10秒
+             */
+            Thread.sleep(10000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
 
         try {
             String fullClassName = packageName + ".ValueEnumRange";
@@ -247,14 +256,17 @@ public class ValidatorEngineTest {
     }
 
 
+    /**
+     * 因为生成的代码生成.class的时间不固定，所以在打包的时候注释掉这个测试
+     */
     //@Test
-    public void testGenerateJavaEnumCodeWithDict() {
+    public void testGenerateJavaEnumCodeWithRuleDict() {
         ValidatorEngine.INSTANCE.init("value_rules_enum_output_test_dict.yml");
 
-        String packageName = "com.baymax.pvg2.values";
-        String sourceFormated = ValidatorEngine.INSTANCE.generateJavaEnumCode(packageName);
+        String packageName = "com.baymax.generator.output.values";
+        String sourceFormat = ValidatorEngine.INSTANCE.generateJavaEnumCode(packageName);
         ValidatorEngine.INSTANCE.writeToFile("ValueEnumRange",
-                packageName, sourceFormated, true);
+                packageName, sourceFormat, true);
 
         try {
             /**
@@ -299,9 +311,75 @@ public class ValidatorEngineTest {
         }
     }
 
+    /**
+     * 测试使用转义字典，生成代码
+     *
+     * 因为生成的代码生成.class的时间不固定，所以在打包的时候注释掉这个测试
+     */
+    //@Test
+    public void testGenerateJavaEnumCodeWithEnumDict() {
+        ValidatorEngine.INSTANCE.init("value_rules_enum_output_test_numeric_enum.yml");
+
+        String packageName = "com.baymax.generator.output.values";
+        String sourceFormat = ValidatorEngine.INSTANCE.generateJavaEnumCode(packageName);
+        ValidatorEngine.INSTANCE.writeToFile("ValueEnumRange",
+                packageName, sourceFormat, true);
+
+        try {
+            /**
+             * 也许文件还没编译到Target中，就开始了下面代码，所以这里休息10秒
+             */
+            Thread.sleep(10000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
+        try {
+            String fullClassName = packageName + ".ValueEnumRange";
+            Object obj = Class.forName(fullClassName).newInstance();
+            Assert.assertTrue(obj.toString().startsWith(fullClassName));
+
+            // 1.得到枚举类对象
+            Class<Enum> clz = (Class<Enum>) Class.forName(fullClassName);
+            // 2.得到所有枚举常量
+            Class[] declaredClasses = clz.getDeclaredClasses();
+            for(Class clz2 : declaredClasses) {
+                Class[] declaredClasses2 = clz2.getDeclaredClasses();
+                for(Class clz3 : declaredClasses2) {
+                    Object[] objects = clz3.getEnumConstants();
+
+                    for(Object k : objects) {
+                        System.out.println(String.format("object %s", String.valueOf(k)));
+                    }
+
+                    Assert.assertEquals(7, objects.length);
+                    Object enumConstant0 = objects[0];
+                    Object enumConstant1 = objects[1];
+                    Object enumConstant2 = objects[2];
+                    Object enumConstant3 = objects[3];
+                    Object enumConstant4 = objects[4];
+                    Object enumConstant5 = objects[5];
+                    Object enumConstant6 = objects[6];
+
+
+                    Assert.assertEquals("unpaid_0", enumConstant0.toString());
+                    Assert.assertEquals("cancel_1", enumConstant1.toString());
+                    Assert.assertEquals("paid_2", enumConstant2.toString());
+                    Assert.assertEquals("refund_3", enumConstant3.toString());
+                    Assert.assertEquals("received_4", enumConstant4.toString());
+                    Assert.assertEquals("refund_return_5", enumConstant5.toString());
+                    Assert.assertEquals("reject_6", enumConstant6.toString());
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            Assert.fail();
+        }
+    }
+
     //@Test
     public void testJsValidatorEnumInteger() {
-        RegexDict.INSTANCE.init();
+        CommonDict.INSTANCE.init();
         ValidatorEngine.INSTANCE.init("value_rules.yml");
         String jsonMapStr = ValidatorEngine.INSTANCE.getFieldValidatorRulesStr("student.game_long_card");
 
@@ -338,7 +416,7 @@ public class ValidatorEngineTest {
 
     @Test
     public void testJsValidatorEnumDecimal() {
-        RegexDict.INSTANCE.init();
+        CommonDict.INSTANCE.init();
         ValidatorEngine.INSTANCE.init("value_rules.yml");
 
         String fieldKey = "student.float_card";
@@ -382,8 +460,8 @@ public class ValidatorEngineTest {
 
 
     @Test
-    public void testEnumStringWithDict() {
-        RegexDict.INSTANCE.init();
+    public void testEnumStringWithCommonDict() {
+        CommonDict.INSTANCE.init();
         ValidatorEngine.INSTANCE.init("value_rules.yml");
         String jsonMapStr = ValidatorEngine.INSTANCE.getFieldValidatorRulesStr("student.domain");
         System.out.println(jsonMapStr);
@@ -398,10 +476,26 @@ public class ValidatorEngineTest {
         Assert.assertTrue(isOK3);
     }
 
+    @Test
+    public void testEnumNumericWithCommonDict() {
+        CommonDict.INSTANCE.init();
+        ValidatorEngine.INSTANCE.init("value_rules_enum_ref_numeric_enum.yml");
+        String jsonMapStr = ValidatorEngine.INSTANCE.getFieldValidatorRulesStr("order.status");
+        System.out.println(jsonMapStr);
+
+        for(int i = 1, len = 6; i <= len; i++) {
+            boolean isOK = ValidatorEngine.INSTANCE.validate("order.status", i);
+            Assert.assertTrue(isOK);
+        }
+
+        boolean isOK4 = ValidatorEngine.INSTANCE.validate("order.status", 7);
+        Assert.assertTrue(isOK4 == false);
+    }
+
 
     @Test
     public void testJsValidatorEnumDecimalMultiSelection() {
-        RegexDict.INSTANCE.init();
+        CommonDict.INSTANCE.init();
         ValidatorEngine.INSTANCE.init("value_rules.yml");
 
         String fieldKey = "student.float_card";
@@ -462,7 +556,7 @@ public class ValidatorEngineTest {
 
     @Test
     public void testJsValidatorString() {
-        RegexDict.INSTANCE.init();
+        CommonDict.INSTANCE.init();
         ValidatorEngine.INSTANCE.init("value_rules.yml");
 
         String fieldKey = "student.phone_number";
@@ -517,7 +611,7 @@ public class ValidatorEngineTest {
 
     @Test
     public void testJsValidatorString2() {
-        RegexDict.INSTANCE.init();
+        CommonDict.INSTANCE.init();
         ValidatorEngine.INSTANCE.init("value_rules.yml");
 
         String fieldKey = "student.user_name";
@@ -561,7 +655,7 @@ public class ValidatorEngineTest {
 
     @Test
     public void testJsValidatorNumber() {
-        RegexDict.INSTANCE.init();
+        CommonDict.INSTANCE.init();
         ValidatorEngine.INSTANCE.init("value_rules.yml");
 
         String fieldKey = "student.age";
@@ -622,7 +716,7 @@ public class ValidatorEngineTest {
 
     @Test
     public void testJsValidatorStringLengthUTF8() {
-        RegexDict.INSTANCE.init();
+        CommonDict.INSTANCE.init();
         ValidatorEngine.INSTANCE.init("value_rules.yml");
 
         String fieldKey = "student.user_name";
@@ -668,7 +762,7 @@ public class ValidatorEngineTest {
 
     @Test
     public void testJsValidatorStringLengthGBK() {
-        RegexDict.INSTANCE.init();
+        CommonDict.INSTANCE.init();
         ValidatorEngine.INSTANCE.init("value_rules.yml");
 
         String fieldKey = "student.user_name_gbk";

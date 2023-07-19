@@ -1,1 +1,1 @@
-#(prefix)_#(valueFormated)(new #(javaType)("#(value)"))
+#(prefix)_#(valueFormat)(new #(javaType)("#(value)"))

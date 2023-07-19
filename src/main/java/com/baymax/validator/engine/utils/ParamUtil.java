@@ -4,6 +4,11 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.Map;
 
+/**
+ * @author xiao.hu
+ * @date 2023-07-12
+ * @apiNote  针对所有可能的数值，参考java的分类，对整型和浮点型选择通用容器进行保存
+ */
 public class ParamUtil {
 
     /**
@@ -37,9 +42,6 @@ public class ParamUtil {
         Object decimalObj = rulesMap.get(key);
 
         if(decimalObj != null) {
-            /*if(!(decimalObj instanceof String)) {
-                throw new IllegalArgumentException("The type of yaml decimal option must be string");
-            }*/
             decimal = new BigDecimal(String.valueOf(decimalObj));
         }
 
