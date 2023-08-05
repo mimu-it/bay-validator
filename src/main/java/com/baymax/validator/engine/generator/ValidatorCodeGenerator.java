@@ -11,6 +11,8 @@ import com.baymax.validator.engine.utils.StrUtil;
 
 import javax.sql.DataSource;
 import java.io.File;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.sql.SQLException;
 import java.util.*;
 
@@ -26,13 +28,15 @@ public class ValidatorCodeGenerator {
      * 用于前端js校验
      */
     public static void generateValidatorConfig(String dbType, DataSource dataSource, String databaseName, List<String> exceptTables,
-                                               String targetClassesPath,
-                                               String packageName, String classFileName,
+                                               String valueRuleModuleTargetPath,
+                                               String valueEnumRangeModuleTargetPath,
+                                               String packageName,
                                                Set<String> userIgnoreKeys, boolean customUseSnake,
                                                String valueRulesDirectory) throws SQLException {
+        String valueRulesYmlDirectory = getValueRulesYmlDirectory(valueRulesDirectory);
 
-        String oldValueRulesYmlFilePath = valueRulesDirectory + File.separator + Const.VALUE_RULES_FILENAME;
-        String regexDictYmlFilePath = valueRulesDirectory + File.separator + Const.COMMON_DICT_FILENAME;
+        String oldValueRulesYmlFilePath = valueRulesYmlDirectory + Const.VALUE_RULES_FILENAME;
+        String regexDictYmlFilePath = valueRulesYmlDirectory + Const.COMMON_DICT_FILENAME;
         ValidatorEngine.INSTANCE.init(dbType, oldValueRulesYmlFilePath, regexDictYmlFilePath, userIgnoreKeys, customUseSnake);
 
 
@@ -82,23 +86,38 @@ public class ValidatorCodeGenerator {
             }
         }
 
-        if(StrUtil.isBlank(valueRulesDirectory)) {
-            valueRulesDirectory = "";
-        }
-
-
         String newValueRulesYmlStr = ValidatorEngine.INSTANCE.generateDefaultYml(oldValueRulesYmlFilePath, list);
         System.out.println(newValueRulesYmlStr);
 
-        String srcResourcesPath = targetClassesPath + "../../src/main/resources/" + valueRulesDirectory;
+        Path srcResourcesPath = Paths.get(valueRuleModuleTargetPath, "..", "..", "src", "main", "resources", valueRulesYmlDirectory);
 
         String[] valueRulesFileNameArr = Const.VALUE_RULES_FILENAME.split("\\.");
-        FileWriter.backupAndWrite(srcResourcesPath, valueRulesFileNameArr[0], valueRulesFileNameArr[1], newValueRulesYmlStr);
+        FileWriter.backupAndWrite(srcResourcesPath.toString(), valueRulesFileNameArr[0], valueRulesFileNameArr[1], newValueRulesYmlStr);
 
         String sourceFormat = ValidatorEngine.INSTANCE.generateJavaEnumCode(packageName);
 
-        String srcJavaPath = targetClassesPath + "../../src/main/java";
-        String packagePath = File.separator + packageName.replaceAll("\\.", File.separator);
-        FileWriter.write(srcJavaPath + packagePath, classFileName, "java", sourceFormat);
+        Path srcJavaPath = Paths.get(valueEnumRangeModuleTargetPath, "..", "..", "src", "main", "java");
+        String packagePath = packageName.replaceAll("\\.", File.separator);
+        Path valueEnumRangePath = Paths.get(srcJavaPath.toString(), packagePath);
+
+        FileWriter.write(valueEnumRangePath.toString(), "ValueEnumRange", "java", sourceFormat);
+    }
+
+    /**
+     * 保护一下输入值
+     * @param valueRulesDirectory
+     * @return
+     */
+    private static String getValueRulesYmlDirectory(String valueRulesDirectory) {
+        String valueRulesYmlDirectory = "";
+        if(StrUtil.isNotBlank(valueRulesDirectory)) {
+            if(valueRulesDirectory.endsWith(File.separator)) {
+                valueRulesYmlDirectory = valueRulesDirectory;
+            }
+            else {
+                valueRulesYmlDirectory = valueRulesDirectory + File.separator;
+            }
+        }
+        return valueRulesYmlDirectory;
     }
 }

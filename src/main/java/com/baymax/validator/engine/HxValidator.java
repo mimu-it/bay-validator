@@ -2,10 +2,13 @@ package com.baymax.validator.engine;
 
 import com.baymax.validator.engine.exception.ErrorCode;
 import com.baymax.validator.engine.exception.IllegalValueException;
+import com.baymax.validator.engine.generator.ValidatorCodeGenerator;
 import com.baymax.validator.engine.generator.formatter.IFormatter;
 import com.baymax.validator.engine.utils.StrUtil;
 import org.apache.commons.lang3.StringUtils;
 
+import javax.sql.DataSource;
+import java.sql.SQLException;
 import java.util.List;
 import java.util.Set;
 
@@ -20,6 +23,9 @@ public class HxValidator {
     private String[] ignoreKeys = null;
     private String[] nullableKeys = null;
 
+    /**
+     * 用于引擎初始化
+     */
     public static class Engine {
         private DataBaseType dbType;
         private String valueRulesYmlFilePath;
@@ -87,6 +93,9 @@ public class HxValidator {
     }
 
 
+    /**
+     * 用于代码中进行字段验证
+     */
     public static class Builder implements IBuilder<HxValidator> {
         private HxValidator hxValidator = new HxValidator();
 
@@ -177,6 +186,75 @@ public class HxValidator {
             return this;
         }
     }
+
+    /**
+     * 用于生成代码
+     */
+    public static class Generator {
+        private String dbType;
+        private DataSource dataSource;
+        private String databaseName;
+        private List<String> exceptTables;
+        private String valueRuleModuleTargetPath;
+        private String valueEnumRangeModuleTargetPath;
+        private String packageName;
+        private Set<String> userIgnoreKeys;
+        private Boolean customUseSnake;
+        private String valueRulesDirectory;
+
+        public static Generator create() {
+            return new Generator();
+        }
+
+        public Generator bindToDatabase(String dbType, DataSource dataSource, String databaseName) {
+            this.bindToDatabase(dbType, dataSource, databaseName, null);
+            return this;
+        }
+
+        public Generator bindToDatabase(String dbType, DataSource dataSource, String databaseName, List<String> exceptTables) {
+            this.dbType = dbType;
+            this.dataSource = dataSource;
+            this.databaseName = databaseName;
+            this.exceptTables = exceptTables;
+            return this;
+        }
+
+        public Generator valueRuleModuleTargetPath(String valueRuleModuleTargetPath, String valueRulesDirectory) {
+            this.valueRuleModuleTargetPath = valueRuleModuleTargetPath;
+            this.valueRulesDirectory = valueRulesDirectory;
+            return this;
+        }
+
+        public Generator valueEnumRangeModuleTargetPath(String valueEnumRangeModuleTargetPath, String packageName) {
+            this.valueEnumRangeModuleTargetPath = valueEnumRangeModuleTargetPath;
+            this.packageName = packageName;
+            return this;
+        }
+
+        /**
+         * Set<String> userIgnoreKeys, boolean customUseSnake  两个是相关的
+         * customUseSnake 决定了 userIgnoreKeys 中的值 是不是下划线模式， 或者是驼峰模式
+         * @param userIgnoreKeys
+         * @param customUseSnake
+         * @return
+         */
+        public Generator userIgnoreKeys(Set<String> userIgnoreKeys, Boolean customUseSnake) {
+            this.userIgnoreKeys = userIgnoreKeys;
+            this.customUseSnake = customUseSnake;
+            return this;
+        }
+
+        public void generate() throws SQLException {
+            ValidatorCodeGenerator.generateValidatorConfig(dbType,
+                    dataSource, databaseName, exceptTables,
+                    valueRuleModuleTargetPath,
+                    valueEnumRangeModuleTargetPath,
+                    packageName, userIgnoreKeys,
+                    customUseSnake, valueRulesDirectory);
+        }
+    }
+
+
 
     public static HxValidator.Builder builder() {
         return new HxValidator.Builder();

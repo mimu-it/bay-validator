@@ -38,11 +38,14 @@ public class TableMetaKit {
 			
 			List<String> tables = new ArrayList<>();
 			while (rs.next()) {
-				if (rs.getString(4) != null
-						&& (rs.getString(4).equalsIgnoreCase("TABLE") || rs
-								.getString(4).equalsIgnoreCase("VIEW"))) {
+				String tableType = rs.getString(4);
+				if(tableType == null) {
+					continue;
+				}
+
+				if (tableType.equalsIgnoreCase("TABLE") || tableType.equalsIgnoreCase("VIEW")) {
 					String tableName = rs.getString(3).toLowerCase();
-					if(!exceptTables.contains(tableName)) {
+					if(exceptTables == null || !exceptTables.contains(tableName)) {
 						System.out.print(tableName + "\t");
 						tables.add(tableName);
 					}
