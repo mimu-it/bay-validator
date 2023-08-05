@@ -1,5 +1,3 @@
-This is a handy field validation code generator that centrally manages the validation rules and allows the front end and back end to share the same set of rules
-
 BayValidator的使用
 
 
@@ -48,7 +46,7 @@ enum_active_status: ["active", "inactive"]
 enum_gender: ["male", "female"]
 ```
 
-
+在工程中，应先在resources目录(自行规划保存的文件夹)下新建此文件。
 
 ## value_rules_common.yml
 
@@ -62,17 +60,41 @@ _common:
     numeric_max: 9999999
     numeric_min: 0
     type: numeric
+  is_deleted:
+    numeric_max: 20
+    numeric_min: 0
+    type: numeric
+  creator:
+    string_length_min: 1
+    string_regex_key: any_string
+    string_length_max: 31
+    type: string
+  created_at:
+    string_length_min: 1
+    string_regex_key: any_string
+    string_length_max: 19
+    type: string
+  modifier:
+    string_length_min: 1
+    string_regex_key: any_string
+    string_length_max: 31
+    type: string
+  updated_at:
+    string_length_min: 1
+    string_regex_key: any_string
+    string_length_max: 19
+    type: string
   version:
     numeric_max: 9999999
     numeric_min: 0
     type: numeric
 ```
 
-
+在工程中，应先在resources目录(自行规划保存的文件夹)下新建此文件。
 
 ## value_rules.yml
 
-value_rules.yml 文件，是每个表字段的规则，可以使用代码生成方式生成默认规则，再进行相应调整。
+value_rules.yml 文件，是每个表字段的规则，可以使用代码生成方式生成默认规则，这些默认规则来源于读取对应数据表的schema的配置，可根据实际情况再进行相应调整。
 
 例如：
 
@@ -328,26 +350,26 @@ public final class ValueEnumRange {
 }
 ```
 
+
+
 # 代码生成
-
-
 
 ## 生成ValueEnumRange类，及value_rules.yml
 
 ```
-HxValidator.Generator.create()
-        .dbType("mysql")
-        .dataSource(dataSource)
-        .databaseName(databaseName)
-        .exceptTables(exceptTables)
-        .valueRuleModuleTargetPath(valueRuleModuleTargetPath)
-        .valueRulesDirectory("validator")
-        .valueEnumRangeModuleTargetPath(valueEnumRangeModuleTargetPath)
-        .packageName(basePackageName + ".validator")
-        .classFileName("ValueEnumRange")
-        .userIgnoreKeys(new HashSet<>())
-        .customUseSnake(true)
-        .generate();
+HxValidator.Generator.create().bindToDatabase("mysql", dataSource, databaseName)
+                  .valueEnumRangeModuleTargetPath(valueEnumRangeModuleTargetPath, basePackageName + ".validator")
+                  .valueRuleModuleTargetPath(valueRuleModuleTargetPath, "validator")
+                  .userIgnoreKeys(new HashSet<String>() {{
+                        add("id");
+                        add("version");
+                        add("is_deleted");
+                        add("modifier");
+                        add("creator");
+                        add("created_at");
+                        add("updated_at");
+                    }}, true)
+                    .generate();
 ```
 
 dbType 可设置mysql、oracle
@@ -365,25 +387,18 @@ DataSource dataSource = datasourcebuilder.build();
 
 
 
-databaseName 就是数据库名
-
-exceptTables 可以设置排除某些表的代码生成
-
-valueRuleModuleTargetPath  是value_rules.yml文件的生成根路径
-
-valueRulesDirectory value_rules.yml文件的生成根路径下可以设置这值，代表子路径
-
-valueEnumRangeModuleTargetPath 是ValueEnumRange.java的生成路径
-
-packageName 是ValueEnumRange.java的包名
-
-classFileName 是
-
-userIgnoreKeys 可以设置忽略字段，不生成对应字段的规则
-
-customUseSnake 是设置这个忽略字段是下划线格式，还是驼峰格式
+- databaseName 就是数据库名
+- exceptTables 可以设置排除某些表的代码生成
+- valueRuleModuleTargetPath  是value_rules.yml文件的生成根路径
+- valueRulesDirectory value_rules.yml文件的生成根路径下可以设置这值，代表子路径
+- valueEnumRangeModuleTargetPath 是ValueEnumRange.java的生成路径
+- packageName 是ValueEnumRange.java的包名
+- userIgnoreKeys 可以设置忽略字段，不生成对应字段的规则
+- customUseSnake 是设置这个忽略字段是下划线格式，还是驼峰格式
 
 
+
+每次生成value_rules.yml时，会先备份原value_rules.yml，备份方式是在文件名后加一串序号，然后读取原value_rules.yml的配置来作为新的value_rules.yml的依据。
 
 
 
@@ -398,11 +413,10 @@ hxValidator.js 是用于在前端使用字段规则的方法，前端从后端�
 ```
 public void publishJs() throws FileNotFoundException {
         final File basePath = new File(ResourceUtils.getURL("classpath:").getPath());
-        String webappPath = basePath + "/../../src/main/webapp";
-        String directory = webappPath + File.separator + "js"
-                + File.separator + "hxValidator";
+        Path webappPath = Paths.get(basePath.getPath(), "..", "..", "src", "main", "webapp");
+        Path jsPublicDirectory = Paths.get(webappPath.toString(), "js", hxValidator);
 
-        File file = new File(directory);
+        File file = new File(jsPublicDirectory.toString());
         if(!file.exists()) {
             file.mkdirs();
         }
@@ -410,7 +424,7 @@ public void publishJs() throws FileNotFoundException {
         /**
          * bayValidator中自带了 hxValidator.js
          */
-        String jsFileName = "hxValidator.js";
+        String jsFileName = hxValidator + ".js";
         try (InputStream in = Thread.currentThread().getContextClassLoader().getResourceAsStream(jsFileName);
              OutputStream out = new FileOutputStream(new File(file.getPath() + File.separator + jsFileName))){
             byte[] buffer = new byte[128];
@@ -423,13 +437,42 @@ public void publishJs() throws FileNotFoundException {
             throw new IllegalStateException(e);
         }
 
-        file = new File(directory + File.separator + jsFileName);
+        file = new File(Paths.get(jsPublicDirectory.toString(), jsFileName).toString());
+        if(!file.exists()) {
+            throw new IllegalStateException("Publish hxValidator.js failed.");
+        }
+    }public void publishJs() throws FileNotFoundException {
+        /** basePath: /Volumes/HD-FOR-MAC/DEV_ENV/projects/webApp/ideaProjects/qy-oa-parent/qy-oa-api/target/classes*/
+        final File basePath = new File(ResourceUtils.getURL("classpath:").getPath());
+        Path webappPath = Paths.get(basePath.getPath(), "..", "..", "src", "main", "webapp");
+        Path jsPublicDirectory = Paths.get(webappPath.toString(), "js", hxValidator);
 
+        File file = new File(jsPublicDirectory.toString());
+        if(!file.exists()) {
+            file.mkdirs();
+        }
+
+        /**
+         * bayValidator中自带了 hxValidator.js
+         */
+        String jsFileName = hxValidator + ".js";
+        try (InputStream in = Thread.currentThread().getContextClassLoader().getResourceAsStream(jsFileName);
+             OutputStream out = new FileOutputStream(new File(file.getPath() + File.separator + jsFileName))){
+            byte[] buffer = new byte[128];
+            int len;
+
+            while ((len = in.read(buffer)) > 0) {
+                out.write(buffer, 0, len);
+            }
+        } catch (IOException e) {
+            throw new IllegalStateException(e);
+        }
+
+        file = new File(Paths.get(jsPublicDirectory.toString(), jsFileName).toString());
         if(!file.exists()) {
             throw new IllegalStateException("Publish hxValidator.js failed.");
         }
     }
-}
 ```
 
 目的就是在工程的 src/main/webapp 目录下生成 hxValidator.js 文件
