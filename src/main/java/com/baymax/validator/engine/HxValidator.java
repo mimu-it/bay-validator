@@ -153,7 +153,7 @@ public class HxValidator {
             }
 
             boolean result = hxValidator.validate(validatorKey, paramValue);
-            if(result) {
+            if(!result) {
                 throw IllegalValueException.builder().errorCode(ErrorCode.validate_failure.name())
                         .params(validatorKey, paramValue).build();
             }
@@ -178,7 +178,7 @@ public class HxValidator {
             }
 
             boolean result = hxValidator.validate(validatorKey, paramValue);
-            if(result) {
+            if(!result) {
                 throw IllegalValueException.builder().errorCode(ErrorCode.validate_failure.name())
                         .params(validatorKey, paramValue).build();
             }

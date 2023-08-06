@@ -388,13 +388,21 @@ DataSource dataSource = datasourcebuilder.build();
 
 
 - databaseName 就是数据库名
+
 - exceptTables 可以设置排除某些表的代码生成
+
 - valueRuleModuleTargetPath  是value_rules.yml文件的生成根路径
+
 - valueRulesDirectory value_rules.yml文件的生成根路径下可以设置这值，代表子路径
+
 - valueEnumRangeModuleTargetPath 是ValueEnumRange.java的生成路径
+
 - packageName 是ValueEnumRange.java的包名
+
 - userIgnoreKeys 可以设置忽略字段，不生成对应字段的规则
+
 - customUseSnake 是设置这个忽略字段是下划线格式，还是驼峰格式
+
 
 
 
@@ -412,36 +420,6 @@ hxValidator.js 是用于在前端使用字段规则的方法，前端从后端�
 
 ```
 public void publishJs() throws FileNotFoundException {
-        final File basePath = new File(ResourceUtils.getURL("classpath:").getPath());
-        Path webappPath = Paths.get(basePath.getPath(), "..", "..", "src", "main", "webapp");
-        Path jsPublicDirectory = Paths.get(webappPath.toString(), "js", hxValidator);
-
-        File file = new File(jsPublicDirectory.toString());
-        if(!file.exists()) {
-            file.mkdirs();
-        }
-
-        /**
-         * bayValidator中自带了 hxValidator.js
-         */
-        String jsFileName = hxValidator + ".js";
-        try (InputStream in = Thread.currentThread().getContextClassLoader().getResourceAsStream(jsFileName);
-             OutputStream out = new FileOutputStream(new File(file.getPath() + File.separator + jsFileName))){
-            byte[] buffer = new byte[128];
-            int len;
-
-            while ((len = in.read(buffer)) > 0) {
-                out.write(buffer, 0, len);
-            }
-        } catch (IOException e) {
-            throw new IllegalStateException(e);
-        }
-
-        file = new File(Paths.get(jsPublicDirectory.toString(), jsFileName).toString());
-        if(!file.exists()) {
-            throw new IllegalStateException("Publish hxValidator.js failed.");
-        }
-    }public void publishJs() throws FileNotFoundException {
         /** basePath: /Volumes/HD-FOR-MAC/DEV_ENV/projects/webApp/ideaProjects/qy-oa-parent/qy-oa-api/target/classes*/
         final File basePath = new File(ResourceUtils.getURL("classpath:").getPath());
         Path webappPath = Paths.get(basePath.getPath(), "..", "..", "src", "main", "webapp");
@@ -478,3 +456,56 @@ public void publishJs() throws FileNotFoundException {
 目的就是在工程的 src/main/webapp 目录下生成 hxValidator.js 文件
 
 前端jsp或者vue页面可以引入这段js
+
+
+
+# 在springboot中使用
+
+启动后立即初始化HxValidator
+
+```
+@Component
+@Order(1)
+public class AppStartedCallback implements ApplicationRunner {
+
+    @Override
+    public void run(ApplicationArguments args) throws Exception {
+        log.info("App started. preparing data.");
+
+        HxValidator.Engine.create()
+                .dbType(DataBaseType.mysql)
+                .commonRules("validator/value_rules_common.yml")
+                .rules("validator/value_rules.yml")
+                .regexDict("validator/common_dict.yml")
+                .ignoreKeys(BoneApiApplication.ignoreKeys)
+                .keyMode(KeyMode.snake)
+                .init();
+    }
+}
+```
+
+value_rules_common.yml, value_rules.yml, common_dict.yml 都放置在src/main/resources/validator文件夹中。
+
+
+
+假如需要校验一个Pojo类，可以这样使用
+
+```
+List<String> illegalProps = HxValidator.builder().with(item).bind(tableName)
+        .nullableKeys(nullableKeys.toArray(new String[0])).validate();
+
+if(!illegalProps.isEmpty()) {
+    return RespResult.failure(ErrorCode.illegal_argument.name(), illegalProps);
+}
+```
+
+illegalProps 中保存了所有验证失败的属性名。
+
+
+
+也可以这样使用, 验证属性不对会抛出异常
+
+```
+HxValidator.builder().validate("student.float_card", 3.11f)
+        .validateIfNonnull("student.gender", "male");
+```

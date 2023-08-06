@@ -3,6 +3,7 @@ package com.baymax;
 import com.baymax.validator.engine.DataBaseType;
 import com.baymax.validator.engine.HxValidator;
 import com.baymax.validator.engine.KeyMode;
+import com.baymax.validator.engine.exception.IllegalValueException;
 import com.baymax.vo.Student;
 import org.junit.Assert;
 import org.junit.Before;
@@ -130,5 +131,18 @@ public class HxValidatorTest {
         student.setFloatCard(5.88f);
         List<String> errors = HxValidator.builder().with(student).bind("student").nullableKeys(new String[]{"id"}).validate();
         Assert.assertTrue(errors.contains("float_card"));
+    }
+
+
+    @Test(expected = IllegalValueException.class)
+    public void testIllegalFloat2() {
+        HxValidator.builder().validate("student.float_card", 5.88f)
+                .validateIfNonnull("student.gender", "male");
+    }
+
+    @Test
+    public void testlegalFloat() {
+        HxValidator.builder().validate("student.float_card", 3.11f)
+                .validateIfNonnull("student.gender", "male");
     }
 }
