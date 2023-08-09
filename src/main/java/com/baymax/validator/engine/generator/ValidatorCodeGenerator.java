@@ -68,7 +68,7 @@ public class ValidatorCodeGenerator {
             List<ColumnMeta> columnMetaList =  tableMeta.getColumnMetaList();
             for(ColumnMeta meta : columnMetaList) {
                 String columnName = meta.getName();
-                String clazzName = meta.getAbbreviationClass();
+                String clazzName = meta.getOriginClass();
 
                 if(ValidatorEngine.containIgnoreKeys(columnName)) {
                     continue;
@@ -76,8 +76,8 @@ public class ValidatorCodeGenerator {
 
                 Integer displaySize = meta.getDisplaySize();
 
-                if(String.class.getSimpleName().equals(clazzName)
-                        || Date.class.getSimpleName().equals(clazzName)) {
+                if(String.class.getName().equals(clazzName)
+                        || Date.class.getName().equals(clazzName)) {
                     ValidatorEngine.makeAnyStringRule(list, tableName, columnName, displaySize);
                 }
                 else {

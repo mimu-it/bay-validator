@@ -948,15 +948,15 @@ public enum ValidatorEngine {
 			List<ColumnMeta> columnMetaList =  tableMeta.getColumnMetaList();
 			for(ColumnMeta meta : columnMetaList) {
 				String columnName = meta.getName();
-				String clazzName = meta.getAbbreviationClass();
+				String clazzName = meta.getOriginClass();
 				Integer displaySize = meta.getDisplaySize();
 
 				if(ignoreKeys.contains(columnName)) {
 					continue;
 				}
 
-				if(String.class.getSimpleName().equals(clazzName)
-						|| Date.class.getSimpleName().equals(clazzName)) {
+				if(String.class.getName().equals(clazzName)
+						|| Date.class.getName().equals(clazzName)) {
 					makeAnyStringRule(list, tableName, columnName, displaySize);
 				}
 				else {
@@ -1004,8 +1004,9 @@ public enum ValidatorEngine {
 			displaySize = 9999;
 		}
 
-		if(Integer.class.getSimpleName().equals(clazzName)
-				|| Long.class.getSimpleName().equals(clazzName)) {
+		if(Integer.class.getName().equals(clazzName)
+				|| Long.class.getName().equals(clazzName)
+		        || BigInteger.class.getName().equals(clazzName)) {
 			FieldRule fr = new NumericFieldRule();
 			fr.setFieldKey(tableName + "." + columnName);
 			fr.setType(RuleType.numeric.name());
@@ -1013,7 +1014,7 @@ public enum ValidatorEngine {
 			fr.setNumericMax(new BigInteger(String.valueOf(displaySize)));
 			list.add(fr);
 		}
-		else if(BigDecimal.class.getSimpleName().equals(clazzName)) {
+		else if(BigDecimal.class.getName().equals(clazzName)) {
 			FieldRule fr = new DecimalFieldRule();
 			fr.setFieldKey(tableName + "." + columnName);
 			fr.setType(RuleType.decimal.name());
