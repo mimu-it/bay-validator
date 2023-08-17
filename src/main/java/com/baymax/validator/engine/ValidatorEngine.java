@@ -923,7 +923,7 @@ public enum ValidatorEngine {
 			return "";
 		}
 
-		Engine ve = Engine.create("Huxiao.coder");
+		//Engine ve = Engine.create("Huxiao.coder");
 
 		Map<String, TableMeta> tablesWithColumnMetaMapping = makeStringTableMetaMap(dataSource, tables);
 
@@ -988,7 +988,18 @@ public enum ValidatorEngine {
 	}
 
 	/**
+	 * TODO 数值型 displaySize 没有意义
+	 * int 可以理解为不带小数点的整数 包括正数和负数
+	 * 从 -2^31 【31次方】(-2,147,483,648) 到 2^31 - 1 (2,147,483,647) 的整型数据（所有数字）。存储大小为 4 个字节。
 	 *
+	 * smallint
+	 * 从 -2^15 (-32,768) 到 2^15 - 1 (32,767) 的整型数据。存储大小为 2 个字节。
+	 *
+	 * tinyint
+	 * 从 0 到 255 的整型数据。存储大小为 1 字节.
+	 *
+	 * bigint
+	 * 从 -2^63 (-9223372036854775808) 到 2^63-1 (9223372036854775807) 的整型数据（所有数字）。存储大小为 8 个字节
 	 * @param list
 	 * @param tableName
 	 * @param columnName
@@ -997,16 +1008,15 @@ public enum ValidatorEngine {
 	 */
 	public static void makeNumericRule(List<FieldRule> list, String tableName,
 									   String columnName, String clazzName, Integer displaySize) {
-		if(displaySize == null) {
-			/**
-			 * 不必要取整型最大值
-			 */
-			displaySize = 9999;
-		}
+		/**
+		 * 不必要取整型最大值
+		 */
+		displaySize = Integer.MAX_VALUE;
 
 		if(Integer.class.getName().equals(clazzName)
 				|| Long.class.getName().equals(clazzName)
-		        || BigInteger.class.getName().equals(clazzName)) {
+		        || BigInteger.class.getName().equals(clazzName)
+				|| Boolean.class.getName().equals(clazzName)) {
 			FieldRule fr = new NumericFieldRule();
 			fr.setFieldKey(tableName + "." + columnName);
 			fr.setType(RuleType.numeric.name());
