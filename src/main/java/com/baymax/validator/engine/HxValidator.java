@@ -30,7 +30,7 @@ public class HxValidator {
         private DataBaseType dbType;
         private String valueRulesYmlFilePath;
         private String commonValueRulesYmlFilePath;
-        private String regexDictYmlFilePath;
+        private String ruleDictYmlFilePath;
         private Set<String> userIgnoreKeys;
         private KeyMode keyMode = KeyMode.camel;
         private IFormatter formatter = null;
@@ -54,8 +54,8 @@ public class HxValidator {
             return this;
         }
 
-        public Engine regexDict(String regexDictYmlFilePath) {
-            this.regexDictYmlFilePath = regexDictYmlFilePath;
+        public Engine ruleDict(String ruleDictYmlFilePath) {
+            this.ruleDictYmlFilePath = ruleDictYmlFilePath;
             return this;
         }
 
@@ -82,7 +82,7 @@ public class HxValidator {
             ValidatorEngine.INSTANCE.init(this.dbType.name(),
                     this.valueRulesYmlFilePath,
                     this.commonValueRulesYmlFilePath,
-                    this.regexDictYmlFilePath,
+                    this.ruleDictYmlFilePath,
                     this.userIgnoreKeys,
                     this.keyMode == KeyMode.snake);
 

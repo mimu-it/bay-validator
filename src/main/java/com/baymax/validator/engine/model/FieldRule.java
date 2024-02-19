@@ -5,6 +5,8 @@ package com.baymax.validator.engine.model;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.util.Date;
+import java.util.Map;
 
 /**
  * @author xiao.hu
@@ -22,6 +24,8 @@ public abstract class FieldRule {
 	private String stringRegexKey = null;
 	private Integer stringLengthMin = null;
 	private Integer stringLengthMax = null;
+	private Date beginAt = null;
+	private Date endAt = null;
 
 	/** Object 可能是 String,  此时需要引用 common_dict 中的值
 	 * 也可能是 List<Object>
@@ -33,7 +37,21 @@ public abstract class FieldRule {
 	 */
 	private Object enumDict = null;
 
-	public abstract boolean validate(String value);
+	/**
+	 *
+	 * @param fieldKey
+	 * @param type
+	 * @param rulesMap
+	 */
+	public abstract void build(String fieldKey, String type, Map<String, Object> rulesMap);
+
+	/**
+	 *
+	 * @param value
+	 * @return
+	 */
+	public abstract boolean validate(Object value);
+
 
 	public String getDbType() {
 		return dbType;
@@ -137,5 +155,21 @@ public abstract class FieldRule {
 
 	public void setEnumDict(Object enumDict) {
 		this.enumDict = enumDict;
+	}
+
+	public Date getBeginAt() {
+		return beginAt;
+	}
+
+	public void setBeginAt(Date beginAt) {
+		this.beginAt = beginAt;
+	}
+
+	public Date getEndAt() {
+		return endAt;
+	}
+
+	public void setEndAt(Date endAt) {
+		this.endAt = endAt;
 	}
 }

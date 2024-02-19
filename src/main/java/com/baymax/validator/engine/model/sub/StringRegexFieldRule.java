@@ -2,10 +2,12 @@ package com.baymax.validator.engine.model.sub;
 
 import com.baymax.validator.engine.CommonDict;
 import com.baymax.validator.engine.model.FieldRule;
+import com.baymax.validator.engine.preset.RuleKey;
 import com.baymax.validator.engine.utils.StrUtil;
 import org.apache.commons.lang3.StringUtils;
 
 import java.io.UnsupportedEncodingException;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -17,7 +19,26 @@ import java.util.regex.Pattern;
 public class StringRegexFieldRule extends FieldRule {
 
     @Override
-    public boolean validate(String realVal) {
+    public void build(String fieldKey, String type, Map<String, Object> rulesMap) {
+        /**
+         * string的相关配置
+         */
+        String stringCharset = (String) rulesMap.get(RuleKey.string_charset.name());
+        String stringRegexKey = (String) rulesMap.get(RuleKey.string_regex_key.name());
+        Integer stringLengthMin = (Integer) rulesMap.get(RuleKey.string_length_min.name());
+        Integer stringLengthMax = (Integer) rulesMap.get(RuleKey.string_length_max.name());
+
+        this.setFieldKey(fieldKey);
+        this.setType(type);
+        this.setStringCharset(stringCharset);
+        this.setStringRegexKey(stringRegexKey);
+        this.setStringLengthMin(stringLengthMin);
+        this.setStringLengthMax(stringLengthMax);
+    }
+
+    @Override
+    public boolean validate(Object value) {
+        String realVal = String.valueOf(value);
         /**
          * 验证字符串长度是否符合规范
          * 如果没有配置，则默认符合长度规范

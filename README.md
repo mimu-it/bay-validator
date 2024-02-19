@@ -4,7 +4,7 @@ BayValidator的使用
 
 # maven本地引入
 
-在maven工程目录src/main/resources/validator中放入bay-validator-1.7.jar文件
+在maven工程目录src/main/resources/validator中放入bay-validator-1.8.jar文件
 
 在pom.xml中引入。
 
@@ -13,9 +13,9 @@ BayValidator的使用
 <dependency>
     <groupId>com.baymax</groupId>
     <artifactId>bay-validator</artifactId>
-    <version>1.7</version>
+    <version>1.8</version>
     <scope>system</scope>
-    <systemPath>${basedir}/src/main/resources/validator/bay-validator-1.7.jar</systemPath>
+    <systemPath>${basedir}/src/main/resources/validator/bay-validator-1.8.jar</systemPath>
 </dependency>
 ```
 

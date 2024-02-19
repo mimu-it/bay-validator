@@ -1,1 +1,5 @@
-#(prefix)_#(valueFormat)(new #(javaType)("#(value)"))
+#if(!"String".equals(javaType))
+    #(prefix)_#(valueFormat)(new #(javaType)("#(value)"))
+#else
+    #(prefix)_#(valueFormat)("#(value)")
+#end

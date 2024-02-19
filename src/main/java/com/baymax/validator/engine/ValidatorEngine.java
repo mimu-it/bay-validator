@@ -1,6 +1,7 @@
 package com.baymax.validator.engine;
 
 import com.baymax.App;
+import com.baymax.validator.engine.common.Common;
 import com.baymax.validator.engine.constant.Const;
 import com.baymax.validator.engine.generator.JavaEnum;
 import com.baymax.validator.engine.generator.JavaEnumTemplateRender;
@@ -10,6 +11,9 @@ import com.baymax.validator.engine.generator.meta.ColumnMeta;
 import com.baymax.validator.engine.generator.meta.TableMeta;
 import com.baymax.validator.engine.model.FieldRule;
 import com.baymax.validator.engine.model.sub.*;
+import com.baymax.validator.engine.preset.DbType;
+import com.baymax.validator.engine.preset.RuleKey;
+import com.baymax.validator.engine.preset.RuleType;
 import com.baymax.validator.engine.utils.BeanUtil;
 import com.baymax.validator.engine.utils.FileWriter;
 import com.baymax.validator.engine.utils.NameUtil;
@@ -59,55 +63,23 @@ public enum ValidatorEngine {
 
 	private static ObjectMapper mapper = new ObjectMapper();
 
-	enum DbType {
-		/**
-		 * 数据库类型，不同类型对于字段长度的校验是有区别的
-		 */
-		mysql,
-		oracle
-	}
-
-
-	enum RuleKey {
-		/**
-		 * yml文件的规则键值
-		 */
-		type,
-		numeric_min,
-		numeric_max,
-		decimal_min,
-		decimal_max,
-		string_charset,
-		string_regex_key,
-		string_length_min,
-		string_length_max,
-		enum_values,
-		enum_dict
-	}
-
-	public enum RuleType {
-		/**
-		 * yml校验规则的类型
-		 */
-		numeric,
-		decimal,
-		string,
-		enum_string,
-		enum_numeric,
-		enum_decimal;
-
-		public static boolean isEnum(String type) {
-			return enum_string.name().equals(type)
-					|| enum_numeric.name().equals(type)
-					|| enum_decimal.name().equals(type);
-		}
-	}
 
 	/**
 	 * Map的形式保存了value_rules.yml的配置
 	 */
 	Map<String, Map<String, Object>> valueRulesMap;
 	Map<String, Map<String, Object>> commonValueRulesMap;
+	private static Map<String, FieldRule> fieldRuleMap = new HashMap<>();
+	static {
+		fieldRuleMap.put(RuleType.numeric.name(), new NumericFieldRule());
+		fieldRuleMap.put(RuleType.decimal.name(), new DecimalFieldRule());
+		fieldRuleMap.put(RuleType.string.name(), new StringRegexFieldRule());
+		fieldRuleMap.put(RuleType.enum_string.name(), new EnumStringFieldRule());
+		fieldRuleMap.put(RuleType.enum_numeric.name(), new EnumNumericFieldRule<>(BigInteger.class));
+		fieldRuleMap.put(RuleType.enum_decimal.name(), new EnumNumericFieldRule<>(BigDecimal.class));
+		fieldRuleMap.put(RuleType.date.name(), new DateFieldRule());
+		fieldRuleMap.put(RuleType.datetime.name(), new DatetimeFieldRule());
+	}
 
 	/**
 	 * 决定键校验时使用驼峰还是下划线模式
@@ -231,7 +203,7 @@ public enum ValidatorEngine {
 					 Set<String> userIgnoreKeys, boolean customUseSnake) {
 		this.isSnakeKeyMode = customUseSnake;
 		ignoreKeys = userIgnoreKeys;
-		checkIgnoreKeysByUseSnake();
+		checkIgnoreKeysForLegality();
 		init(dbType, valueRulesYmlFilePath, commonValueRulesYmlFilePath, regexDictYmlFilePath);
 	}
 
@@ -244,7 +216,7 @@ public enum ValidatorEngine {
 					 Set<String> userIgnoreKeys, boolean customUseSnake) {
 		this.isSnakeKeyMode = customUseSnake;
 		ignoreKeys = userIgnoreKeys;
-		checkIgnoreKeysByUseSnake();
+		checkIgnoreKeysForLegality();
 
 		init0(dbType, valueRulesYmlFilePath, regexDictYmlFilePath);
 	}
@@ -253,7 +225,7 @@ public enum ValidatorEngine {
 	/**
 	 * 判断当前预设的忽略字段是否也满足键的模式
 	 */
-	private void checkIgnoreKeysByUseSnake() {
+	private void checkIgnoreKeysForLegality() {
 		for(String key : ignoreKeys) {
 			if(this.isSnakeKeyMode) {
 				char[] chars = key.toCharArray();
@@ -280,7 +252,7 @@ public enum ValidatorEngine {
 	 * @param ymlFilePath
 	 * @return
 	 */
-	public static Map<String, Object> loadYml(String ymlFilePath) {
+	public static Map<String, Object> loadRuleDictYml(String ymlFilePath) {
 		Yaml yaml = new Yaml();
 
 		Map<String, Object> map = new HashMap<>(2);
@@ -299,8 +271,11 @@ public enum ValidatorEngine {
 				/**
 				 *  读取所有输入,包括回车换行符
 				 *  \\A为正则表达式,表示从字符头开始
+				 *
+				 *  hasNext()：如果输入源中还有下一个标记（非空格字符），返回 true。
 				 */
 				Scanner s = new Scanner(is).useDelimiter("\\A");
+				/** originValueRulesStr 会得到配置全文 */
 				String originValueRulesStr = s.hasNext() ? s.next() : "";
 
 				Map<String, Object> mapValueDict = yaml.loadAs(originValueRulesStr, Map.class);
@@ -313,11 +288,16 @@ public enum ValidatorEngine {
 
 		if(listMap.size() > 1) {
 			/**
-			 * 最后加载的是bay-validator本身的配置文件
+			 * 1.会加载bay-validator自身的预制配置
+			 * 2.会加载用户定义的 common_dict
+			 * 最后加载的是用户自定义的 common_dict 的配置文件，所以需要reverse
 			 */
 			Collections.reverse(listMap);
 		}
 
+		/**
+		 * map 会融合bay-validator自身的预制配置和用户定义的 common_dict
+		 */
 		listMap.forEach((itemMap) -> map.putAll(itemMap));
 
 		return map;
@@ -471,116 +451,15 @@ public enum ValidatorEngine {
 	private FieldRule buildFieldRule(String fieldKey, Map<String, Object> rulesMap) {
 		String type = (String) rulesMap.get(RuleKey.type.name());
 
-		/**
-		 * 数值型相关配置
-		 * yaml会根据配置数值的大小，自动匹配int long BigInteger类型
-		 * 因为假设numericMin为1时，yaml将其匹配为int型，而numericMax为大数，匹配为long型
-		 * 比较起来需要做类型转换，所以统一使用BigInteger类型进行全兼容
-		 */
-		BigInteger numericMin = ParamUtil.getBigInteger(rulesMap, RuleKey.numeric_min.name());
-		BigInteger numericMax = ParamUtil.getBigInteger(rulesMap, RuleKey.numeric_max.name());
-
-		/**
-		 * decimal的相关配置
-		 */
-		BigDecimal decimalMin = ParamUtil.getBigDecimal(rulesMap, RuleKey.decimal_min.name());
-		BigDecimal decimalMax = ParamUtil.getBigDecimal(rulesMap, RuleKey.decimal_max.name());
-
-		/**
-		 * string的相关配置
-		 */
-		String stringCharset = (String) rulesMap.get(RuleKey.string_charset.name());
-		String stringRegexKey = (String) rulesMap.get(RuleKey.string_regex_key.name());
-		Integer stringLengthMin = (Integer) rulesMap.get(RuleKey.string_length_min.name());
-		Integer stringLengthMax = (Integer) rulesMap.get(RuleKey.string_length_max.name());
-
-		/**
-		 * enum的相关配置
-		 */
-		List<Object> enumValuesList = this.getEnumValues(rulesMap);
-		Map<Object, String> enumDict = this.getEnumDict(rulesMap);
-
-		/**
-		 * 工厂方法
-		 */
-		if(RuleType.numeric.name().equals(type)) {
-			FieldRule fr = new NumericFieldRule();
-			fr.setFieldKey(fieldKey);
-			fr.setType(type);
-			fr.setNumericMin(numericMin);
-			fr.setNumericMax(numericMax);
-			return fr;
-		}
-		if(RuleType.decimal.name().equals(type)) {
-			FieldRule fr = new DecimalFieldRule();
-			fr.setFieldKey(fieldKey);
-			fr.setType(type);
-			fr.setDecimalMin(decimalMin);
-			fr.setDecimalMax(decimalMax);
-			return fr;
-		}
-		else if(RuleType.string.name().equals(type)) {
-			FieldRule fr = new StringRegexFieldRule();
-			fr.setFieldKey(fieldKey);
-			fr.setType(type);
-			fr.setStringCharset(stringCharset);
-			fr.setStringRegexKey(stringRegexKey);
-			fr.setStringLengthMin(stringLengthMin);
-			fr.setStringLengthMax(stringLengthMax);
-			return fr;
-		}
-		else if(RuleType.enum_string.name().equals(type)) {
-			FieldRule fr = new EnumStringFieldRule();
-			fr.setFieldKey(fieldKey);
-			fr.setType(type);
-			fr.setEnumValues(enumValuesList);
-			return fr;
-		}
-		else if(RuleType.enum_numeric.name().equals(type)) {
-			FieldRule fr = new EnumNumericFieldRule<>(BigInteger.class);
-			fr.setFieldKey(fieldKey);
-			fr.setType(type);
-			fr.setEnumValues(enumValuesList);
-			fr.setEnumDict(enumDict);
-			return fr;
-		}
-		else if(RuleType.enum_decimal.name().equals(type)) {
-			FieldRule fr = new EnumNumericFieldRule<>(BigDecimal.class);
-			fr.setFieldKey(fieldKey);
-			fr.setType(type);
-			fr.setEnumValues(enumValuesList);
-			fr.setEnumDict(enumDict);
-			return fr;
+		FieldRule fr = fieldRuleMap.get(type);
+		if(fr == null) {
+			return null;
 		}
 
-		return null;
+		fr.build(fieldKey, type, rulesMap);
+		return fr;
 	}
 
-	private List<Object> getEnumValues(Map<String, Object> rulesMap) {
-		Object enumValues = rulesMap.get(RuleKey.enum_values.name());
-		List<Object> enumValuesList = null;
-		if(enumValues instanceof List) {
-			enumValuesList = (List<Object>) enumValues;
-		}
-		else if(enumValues instanceof String) {
-			enumValuesList = CommonDict.INSTANCE.getList((String) enumValues);
-		}
-		return enumValuesList;
-	}
-
-
-	/**
-	 * 对于 number 类型的枚举值，可以在 enum_dict 中配置转义字典
-	 * @param rulesMap
-	 * @return
-	 */
-	private Map<Object, String> getEnumDict(Map<String, Object> rulesMap) {
-		Object enumDict = rulesMap.get(RuleKey.enum_dict.name());
-		if(enumDict instanceof Map) {
-			return (Map<Object, String>) enumDict;
-		}
-		return null;
-	}
 
 
 	/**
@@ -657,10 +536,10 @@ public enum ValidatorEngine {
 
 	/**
 	 * 获得配置的校验规则的json字符串
-	 * 
+	 *
 	 * @param fieldKey
 	 * @return
-	 * @throws JsonProcessingException 
+	 * @throws JsonProcessingException
 	 */
 	public String getFieldValidatorRulesJsonStr(String fieldKey) {
         try {
@@ -704,7 +583,7 @@ public enum ValidatorEngine {
 				throw new IllegalStateException(String.format("No field(%s) rule found", validatorKey));
 			}
 		}
-		return fr.validate(String.valueOf(paramValue));
+		return fr.validate(paramValue);
 	}
 
 
@@ -873,8 +752,8 @@ public enum ValidatorEngine {
 					continue;
 				}
 
-				List<Object> enumValues = this.getEnumValues(fieldRuleMap);
-				Map<Object, String> enumDict = this.getEnumDict(fieldRuleMap);
+				List<Object> enumValues = Common.getEnumValues(fieldRuleMap);
+				Map<Object, String> enumDict = Common.getEnumDict(fieldRuleMap);
 
 				JavaEnum je = JavaEnumTemplateRender.build(fieldName, type, enumValues, enumDict);
 				importList.add("import " + je.getCanonicalJavaType());

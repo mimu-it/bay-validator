@@ -3,7 +3,6 @@ package com.baymax.validator.engine;
 import com.baymax.validator.engine.constant.Const;
 import com.baymax.validator.engine.utils.StrUtil;
 
-import java.io.File;
 import java.util.List;
 import java.util.Map;
 
@@ -32,7 +31,7 @@ public enum CommonDict {
         regexDictYmlFilePath = StrUtil.isBlank(regexDictYmlFilePath) ?
                 Const.COMMON_DICT_FILENAME : regexDictYmlFilePath;
 
-        dict = ValidatorEngine.loadYml(regexDictYmlFilePath);
+        dict = ValidatorEngine.loadRuleDictYml(regexDictYmlFilePath);
         if(dict == null) {
             throw new IllegalStateException("load " + Const.COMMON_DICT_FILENAME + " failed");
         }

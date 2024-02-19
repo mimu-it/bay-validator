@@ -2,6 +2,7 @@ package com.baymax.validator.engine.generator;
 
 import com.baymax.validator.engine.ValidatorEngine;
 import com.baymax.validator.engine.constant.Const;
+import com.baymax.validator.engine.preset.RuleType;
 import com.baymax.validator.engine.utils.StrUtil;
 import com.jfinal.kit.Kv;
 import com.jfinal.template.Engine;
@@ -28,12 +29,12 @@ public class JavaEnumTemplateRender {
         JavaEnum je = new JavaEnum();
         je.setFieldName(fieldName);
 
-        if(ValidatorEngine.RuleType.enum_numeric.name().equals(type)) {
+        if(RuleType.enum_numeric.name().equals(type)) {
             je.setJavaType(BigInteger.class.getSimpleName());
             je.setCanonicalJavaType(BigInteger.class.getCanonicalName());
             je.setEnumValues(buildEnumValuesStr(enumValues, Const.JavaType.NUMBER.name(), je.getJavaType(), enumDict));
         }
-        else if(ValidatorEngine.RuleType.enum_decimal.name().equals(type)) {
+        else if(RuleType.enum_decimal.name().equals(type)) {
             /**
              * 由于double的精度是有误差的，所以yml配置enum_decimal时，务必使用string
              * 举例：'4000000000.123456'

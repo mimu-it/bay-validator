@@ -5,7 +5,7 @@ import java.math.BigDecimal;
 
 /**
  * @author xiao.hu
- * create time:2023-08-17 20:29:41
+ * create time:2023-08-20 11:00:03
  * 
  */
 public final class ValueEnumRange implements Serializable {

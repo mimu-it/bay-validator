@@ -1,4 +1,4 @@
-public static enum #(fieldName) {
+public enum #(fieldName) {
 	#(enumValues);
 
 	private final #(javaType) value;

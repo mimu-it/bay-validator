@@ -2,6 +2,10 @@ package com.baymax.validator.engine.utils;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.text.SimpleDateFormat;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.util.Date;
 import java.util.Map;
 
 /**
@@ -10,6 +14,9 @@ import java.util.Map;
  * @apiNote  针对所有可能的数值，参考java的分类，对整型和浮点型选择通用容器进行保存
  */
 public class ParamUtil {
+
+    private static SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
+    private static SimpleDateFormat datetimeFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 
     /**
      * 从yml文件中获取参数配置值，转换成BigInteger
@@ -46,5 +53,51 @@ public class ParamUtil {
         }
 
         return decimal;
+    }
+
+    /**
+     *
+     * @param rulesMap
+     * @param key
+     * @return
+     */
+    public static Date getDate(Map<String, Object> rulesMap, String key) {
+        return getDate(rulesMap, key, dateFormat);
+    }
+
+    /**
+     *
+     * @param rulesMap
+     * @param key
+     * @return
+     */
+    public static Date getDatetime(Map<String, Object> rulesMap, String key) {
+        return getDate(rulesMap, key, datetimeFormat);
+    }
+
+    /**
+     *
+     * @param rulesMap
+     * @param key
+     * @param datetimeFormat
+     * @return
+     */
+    private static Date getDate(Map<String, Object> rulesMap, String key, SimpleDateFormat datetimeFormat) {
+        Object dateObj = rulesMap.get(key);
+        if(dateObj != null) {
+            if(dateObj instanceof String) {
+                String dateStr = String.valueOf(dateObj);
+                try {
+                    return datetimeFormat.parse(dateStr);
+                } catch (Exception e) {
+                    return null;
+                }
+            }
+            else if(dateObj instanceof Date) {
+                return (Date)dateObj;
+            }
+        }
+
+        return null;
     }
 }

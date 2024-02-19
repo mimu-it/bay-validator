@@ -1,11 +1,13 @@
 package com.baymax.validator.engine.model.sub;
 
 import com.baymax.validator.engine.CommonDict;
+import com.baymax.validator.engine.common.Common;
 import com.baymax.validator.engine.model.FieldRule;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 数字型枚举
@@ -20,9 +22,24 @@ public class EnumNumericFieldRule<T extends Comparable> extends FieldRule {
         this.entityClass = clazz;
     }
 
+
     @Override
-    public boolean validate(String value) {
-        Comparable realVal = transform(value);
+    public void build(String fieldKey, String type, Map<String, Object> rulesMap) {
+        /**
+         * enum的相关配置
+         */
+        List<Object> enumValuesList = Common.getEnumValues(rulesMap);
+        Map<Object, String> enumDict = Common.getEnumDict(rulesMap);
+        this.setFieldKey(fieldKey);
+        this.setType(type);
+        this.setEnumValues(enumValuesList);
+        this.setEnumDict(enumDict);
+    }
+
+    @Override
+    public boolean validate(Object value) {
+        String valueStr = String.valueOf(value);
+        Comparable realVal = transform(valueStr);
         if(realVal == null) {
             return false;
         }
@@ -57,6 +74,8 @@ public class EnumNumericFieldRule<T extends Comparable> extends FieldRule {
 
         return false;
     }
+
+
 
     private Comparable transform(String value) {
         if(entityClass.isAssignableFrom(BigInteger.class)) {

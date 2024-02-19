@@ -259,7 +259,7 @@ public class ValidatorEngineTest {
     /**
      * 因为生成的代码生成.class的时间不固定，所以在打包的时候注释掉这个测试
      */
-    //@Test
+    @Test
     public void testGenerateJavaEnumCodeWithRuleDict() {
         ValidatorEngine.INSTANCE.init("value_rules_enum_output_test_dict.yml");
 

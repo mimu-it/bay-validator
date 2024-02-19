@@ -14,6 +14,8 @@ import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.sql.SQLException;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.*;
 
 /**
@@ -77,7 +79,9 @@ public class ValidatorCodeGenerator {
                 Integer displaySize = meta.getDisplaySize();
 
                 if(String.class.getName().equals(clazzName)
-                        || Date.class.getName().equals(clazzName)) {
+                        || Date.class.getName().equals(clazzName)
+                        || LocalDateTime.class.getName().equals(clazzName)
+                        || LocalDate.class.getName().equals(clazzName)) {
                     ValidatorEngine.makeAnyStringRule(list, tableName, columnName, displaySize);
                 }
                 else {

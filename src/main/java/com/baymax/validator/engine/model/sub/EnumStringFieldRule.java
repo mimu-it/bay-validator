@@ -1,9 +1,11 @@
 package com.baymax.validator.engine.model.sub;
 
 import com.baymax.validator.engine.CommonDict;
+import com.baymax.validator.engine.common.Common;
 import com.baymax.validator.engine.model.FieldRule;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * @author xiao.hu
@@ -14,7 +16,19 @@ import java.util.List;
 public class EnumStringFieldRule extends FieldRule {
 
     @Override
-    public boolean validate(String realVal) {
+    public void build(String fieldKey, String type, Map<String, Object> rulesMap) {
+        /**
+         * enum的相关配置
+         */
+        List<Object> enumValuesList = Common.getEnumValues(rulesMap);
+        this.setFieldKey(fieldKey);
+        this.setType(type);
+        this.setEnumValues(enumValuesList);
+    }
+
+    @Override
+    public boolean validate(Object realVal) {
+        String valueStr = String.valueOf(realVal);
         Object enumValuesObj = super.getEnumValues();
         if(enumValuesObj == null) {
             throw new IllegalStateException("enum values is null");
@@ -34,7 +48,7 @@ public class EnumStringFieldRule extends FieldRule {
 
         for(Object obj : enumValues) {
             String objVal = (String) obj;
-            if(objVal.equals(realVal)) {
+            if(objVal.equals(valueStr)) {
                 return true;
             }
         }

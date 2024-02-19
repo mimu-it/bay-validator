@@ -30,7 +30,7 @@ public class HxValidatorTest {
                 .dbType(DataBaseType.mysql)
                 .commonRules("value_rules_common.yml")
                 .rules("value_rules.yml")
-                .regexDict("common_dict.yml")
+                .ruleDict("common_dict.yml")
                 .ignoreKeys(new HashSet<String>() {{
                     add("id");
                     add("version");
@@ -141,7 +141,7 @@ public class HxValidatorTest {
     }
 
     @Test
-    public void testlegalFloat() {
+    public void testLegalFloat() {
         HxValidator.builder().validate("student.float_card", 3.11f)
                 .validateIfNonnull("student.gender", "male");
     }
