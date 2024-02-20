@@ -3,3 +3,11 @@ student:
     type: date
     begin_at: 2021-10-01
     end_at: 2024-12-26
+  birthday2:
+    type: date
+    begin_at: 2021-10-02
+  birthday3:
+    type: date
+    end_at: 2024-12-20
+  birthday4:
+    type: date

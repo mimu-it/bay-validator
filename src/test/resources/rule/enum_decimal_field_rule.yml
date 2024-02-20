@@ -1,0 +1,6 @@
+student:
+  float_card:
+    type: enum_decimal
+    enum_values:
+    - '3.11'
+    - '4000000000.123456'

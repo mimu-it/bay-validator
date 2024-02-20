@@ -1,0 +1,6 @@
+student:
+  gender:
+    type: enum_string
+    enum_values:
+    - male
+    - female

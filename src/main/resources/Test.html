@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <script type="module" src="./hxValidator.js" type="text/javascript"></script>
+</head>
+<body>
+
+</body>
+<script type="module">
+    import { testHxValidator } from './hxValidator.js';
+    window.onload = function() {
+        decimalTest();
+        numericTest();
+        enumDecimalTest();
+        enumStringTest();
+        regexStringUTF8Test();
+        regexStringGBKTest();
+        dateTest();
+        datetimeTest();
+    }
+
+    /**
+     * 测试 decimal
+     */
+    function decimalTest() {
+        console.group("decimalTest")
+        let result = testHxValidator("{'purchase.housing_total_price': {" +
+            "            'fieldKey': \"\",\n" +
+            "            \"type\": \"decimal\",\n" +
+            "            \"decimalMin\": \"0.0\",\n" +
+            "            \"decimalMax\": \"1000000000\"\n" +
+            "        }}", "purchase.housing_total_price", "1");
+
+        if(result.length != 0) {
+            throw Error("出现错误")
+        }
+        console.log("验证成功")
+
+        result = testHxValidator("{\"purchase.housing_total_price\": {\n" +
+            "            \"fieldKey\": \"\",\n" +
+            "            \"type\": \"decimal\",\n" +
+            "            \"decimalMin\": \"0.0\",\n" +
+            "            \"decimalMax\": \"1000000000\"\n" +
+            "        }}", "purchase.housing_total_price", "-1");
+        if(result.length == 0) {
+            throw Error("出现错误")
+        }
+        console.log("验证成功")
+
+        result = testHxValidator("{\"purchase.housing_total_price\": {\n" +
+            "            \"fieldKey\": \"\",\n" +
+            "            \"type\": \"decimal\",\n" +
+            "            \"decimalMin\": \"0.0\",\n" +
+            "            \"decimalMax\": \"1000000000\"\n" +
+            "        }}", "purchase.housing_total_price", "1000000000.1");
+        if(result.length == 0) {
+            throw Error("出现错误")
+        }
+        console.log("验证成功")
+        console.groupEnd()
+    }
+
+    /**
+     * 测试 numeric
+     */
+    function numericTest() {
+        console.group("numericTest")
+        let result = testHxValidator("{'student.age': {" +
+            "            'fieldKey': \"\",\n" +
+            "            \"type\": \"numeric\",\n" +
+            "            \"numericMin\": \"0\",\n" +
+            "            \"numericMax\": \"120\"\n" +
+            "        }}", "student.age", "1");
+
+        if(result.length != 0) {
+            throw Error("出现错误")
+        }
+        console.log("验证成功")
+
+        result = testHxValidator("{'student.age': {" +
+            "            'fieldKey': \"\",\n" +
+            "            \"type\": \"numeric\",\n" +
+            "            \"numericMin\": \"0\",\n" +
+            "            \"numericMax\": \"120\"\n" +
+            "        }}", "student.age", "-1");
+
+        if(result.length == 0) {
+            throw Error("出现错误")
+        }
+        console.log("验证成功")
+
+        result = testHxValidator("{'student.age': {" +
+            "            'fieldKey': \"\",\n" +
+            "            \"type\": \"numeric\",\n" +
+            "            \"numericMin\": \"0\",\n" +
+            "            \"numericMax\": \"120\"\n" +
+            "        }}", "student.age", "121");
+
+        if(result.length == 0) {
+            throw Error("出现错误")
+        }
+        console.log("验证成功")
+        console.groupEnd()
+    }
+
+
+    /**
+     * 测试枚举
+     */
+    function enumDecimalTest() {
+        console.group("enumDecimalTest")
+        let result = testHxValidator("{'student.float_card': {" +
+            "            'fieldKey': \"\",\n" +
+            "            \"type\": \"enum_decimal\",\n" +
+            "            \"enumValues\": [\"3.11\", \"4000000000.123456\"],\n" +
+            "        }}", "student.float_card", "\"3.11\"");
+
+        if(result.length != 0) {
+            throw Error("出现错误")
+        }
+        console.log("验证成功")
+
+        result = testHxValidator("{'student.float_card': {" +
+            "            'fieldKey': \"\",\n" +
+            "            \"type\": \"enum_decimal\",\n" +
+            "            \"enumValues\": [\"3.11\", \"4000000000.123456\"],\n" +
+            "        }}", "student.float_card", "\"4000000000.123456\"");
+
+        if(result.length != 0) {
+            throw Error("出现错误")
+        }
+        console.log("验证成功")
+
+        result = testHxValidator("{'student.float_card': {" +
+            "            'fieldKey': \"\",\n" +
+            "            \"type\": \"enum_decimal\",\n" +
+            "            \"enumValues\": [\"3.11\", \"4000000000.123456\"],\n" +
+            "        }}", "student.float_card", "\"3.00\"");
+
+        if(result.length == 0) {
+            throw Error("出现错误")
+        }
+        console.log("验证成功")
+        console.groupEnd()
+    }
+
+    /**
+     * 测试枚举
+     */
+    function enumStringTest() {
+        console.group("enumStringTest")
+        let result = testHxValidator("{'student.gender': {" +
+            "            'fieldKey': \"\",\n" +
+            "            \"type\": \"enum_string\",\n" +
+            "            \"enumValues\": [\"male\", \"female\"],\n" +
+            "        }}", "student.gender", "\"male\"");
+
+        if(result.length != 0) {
+            throw Error("出现错误")
+        }
+        console.log("验证成功")
+
+        result = testHxValidator("{'student.gender': {" +
+            "            'fieldKey': \"\",\n" +
+            "            \"type\": \"enum_string\",\n" +
+            "            \"enumValues\": [\"male\", \"female\"],\n" +
+            "        }}", "student.gender", "\"female\"");
+
+        if(result.length != 0) {
+            throw Error("出现错误")
+        }
+        console.log("验证成功")
+
+        result = testHxValidator("{'student.gender': {" +
+            "            'fieldKey': \"\",\n" +
+            "            \"type\": \"enum_string\",\n" +
+            "            \"enumValues\": [\"male\", \"female\"],\n" +
+            "        }}", "student.gender", "\"hhh\"");
+
+        if(result.length == 0) {
+            throw Error("出现错误")
+        }
+        console.log("验证成功")
+        console.groupEnd()
+    }
+
+    /**
+     * 测试字符串正则表达式
+     */
+    function regexStringUTF8Test() {
+        console.group("regexStringUTF8Test")
+        let result = testHxValidator("{'student.user_name': {" +
+            "            'fieldKey': \"\",\n" +
+            "            \"type\": \"string\",\n" +
+            "            \"stringCharset\": \"utf8\",\n" +
+            "            \"regexStr\": \"^[\u4e00-\u9fa5_a-zA-Z0-9]+$\",\n" +
+            "            \"stringLengthMin\": 3,\n" +
+            "            \"stringLengthMax\": 12,\n" +
+            "        }}", "student.user_name", "\"胡\"");
+
+        if(result.length != 0) {
+            throw Error("出现错误")
+        }
+        console.log("验证成功")
+
+
+        result = testHxValidator("{'student.user_name': {" +
+            "            'fieldKey': \"\",\n" +
+            "            \"type\": \"string\",\n" +
+            "            \"stringCharset\": \"utf8\",\n" +
+            "            \"regexStr\": \"^[\u4e00-\u9fa5_a-zA-Z0-9]+$\",\n" +
+            "            \"stringLengthMin\": 3,\n" +
+            "            \"stringLengthMax\": 12,\n" +
+            "        }}", "student.user_name", "\"hhh\"");
+
+        if(result.length != 0) {
+            throw Error("出现错误")
+        }
+        console.log("验证成功")
+
+
+        result = testHxValidator("{'student.user_name': {" +
+            "            'fieldKey': \"\",\n" +
+            "            \"type\": \"string\",\n" +
+            "            \"stringCharset\": \"utf8\",\n" +
+            "            \"regexStr\": \"^[\u4e00-\u9fa5_a-zA-Z0-9]+$\",\n" +
+            "            \"stringLengthMin\": 3,\n" +
+            "            \"stringLengthMax\": 12,\n" +
+            "        }}", "student.user_name", "\"胡_hhh\"");
+
+        if(result.length != 0) {
+            throw Error("出现错误")
+        }
+        console.log("验证成功")
+
+
+
+        result = testHxValidator("{'student.user_name': {" +
+            "            'fieldKey': \"\",\n" +
+            "            \"type\": \"string\",\n" +
+            "            \"stringCharset\": \"utf8\",\n" +
+            "            \"regexStr\": \"^[\u4e00-\u9fa5_a-zA-Z0-9]+$\",\n" +
+            "            \"stringLengthMin\": 3,\n" +
+            "            \"stringLengthMax\": 12,\n" +
+            "        }}", "student.user_name", "\"hhhhhhhhhhhh\"");
+
+        if(result.length != 0) {
+            throw Error("出现错误")
+        }
+        console.log("验证成功")
+
+
+
+        result = testHxValidator("{'student.user_name': {" +
+            "            'fieldKey': \"\",\n" +
+            "            \"type\": \"string\",\n" +
+            "            \"stringCharset\": \"utf8\",\n" +
+            "            \"regexStr\": \"^[\u4e00-\u9fa5_a-zA-Z0-9]+$\",\n" +
+            "            \"stringLengthMin\": 3,\n" +
+            "            \"stringLengthMax\": 12,\n" +
+            "        }}", "student.user_name", "\"胡胡胡胡\"");
+
+        if(result.length != 0) {
+            throw Error("出现错误")
+        }
+        console.log("验证成功")
+
+
+        result = testHxValidator("{'student.user_name': {" +
+            "            'fieldKey': \"\",\n" +
+            "            \"type\": \"string\",\n" +
+            "            \"stringCharset\": \"utf8\",\n" +
+            "            \"regexStr\": \"^[\u4e00-\u9fa5_a-zA-Z0-9]+$\",\n" +
+            "            \"stringLengthMin\": 3,\n" +
+            "            \"stringLengthMax\": 12,\n" +
+            "        }}", "student.user_name", "\"胡胡胡胡h\"");
+
+        if(result.length == 0) {
+            throw Error("出现错误")
+        }
+        console.log("验证成功")
+
+
+        result = testHxValidator("{'student.user_name': {" +
+            "            'fieldKey': \"\",\n" +
+            "            \"type\": \"string\",\n" +
+            "            \"stringCharset\": \"utf8\",\n" +
+            "            \"regexStr\": \"^[\u4e00-\u9fa5_a-zA-Z0-9]+$\",\n" +
+            "            \"stringLengthMin\": 3,\n" +
+            "            \"stringLengthMax\": 12,\n" +
+            "        }}", "student.user_name", "\"hh\"");
+
+        if(result.length == 0) {
+            throw Error("出现错误")
+        }
+        console.log("验证成功")
+
+
+        result = testHxValidator("{'student.user_name': {" +
+            "            'fieldKey': \"\",\n" +
+            "            \"type\": \"string\",\n" +
+            "            \"stringCharset\": \"utf8\",\n" +
+            "            \"regexStr\": \"^[\u4e00-\u9fa5_a-zA-Z0-9]+$\",\n" +
+            "            \"stringLengthMin\": 3,\n" +
+            "            \"stringLengthMax\": 12,\n" +
+            "        }}", "student.user_name", "\"胡*\"");
+
+        if(result.length == 0) {
+            throw Error("出现错误")
+        }
+        console.log("验证成功")
+
+
+        result = testHxValidator("{'student.user_name': {" +
+            "            'fieldKey': \"\",\n" +
+            "            \"type\": \"string\",\n" +
+            "            \"stringCharset\": \"utf8\",\n" +
+            "            \"regexStr\": \"^[\u4e00-\u9fa5_a-zA-Z0-9]+$\",\n" +
+            "            \"stringLengthMin\": 3,\n" +
+            "            \"stringLengthMax\": 12,\n" +
+            "        }}", "student.user_name", "\"hhhhhhhhhhhhh\"");
+
+        if(result.length == 0) {
+            throw Error("出现错误")
+        }
+        console.log("验证成功")
+
+        console.groupEnd()
+    }
+
+    /**
+     * 测试字符串正则表达式
+     */
+    function regexStringGBKTest() {
+        console.group("regexStringGBKTest")
+        let result = testHxValidator("{'student.user_name': {" +
+            "            'fieldKey': \"\",\n" +
+            "            \"type\": \"string\",\n" +
+            "            \"stringCharset\": \"GBK\",\n" +
+            "            \"regexStr\": \"^[\u4e00-\u9fa5_a-zA-Z0-9]+$\",\n" +
+            "            \"stringLengthMin\": 3,\n" +
+            "            \"stringLengthMax\": 12,\n" +
+            "        }}", "student.user_name", "\"胡1\"");
+
+        if(result.length != 0) {
+            throw Error("出现错误")
+        }
+        console.log("验证成功")
+
+
+        result = testHxValidator("{'student.user_name': {" +
+            "            'fieldKey': \"\",\n" +
+            "            \"type\": \"string\",\n" +
+            "            \"stringCharset\": \"GBK\",\n" +
+            "            \"regexStr\": \"^[\u4e00-\u9fa5_a-zA-Z0-9]+$\",\n" +
+            "            \"stringLengthMin\": 3,\n" +
+            "            \"stringLengthMax\": 12,\n" +
+            "        }}", "student.user_name", "\"hhh\"");
+
+        if(result.length != 0) {
+            throw Error("出现错误")
+        }
+        console.log("验证成功")
+
+
+        result = testHxValidator("{'student.user_name': {" +
+            "            'fieldKey': \"\",\n" +
+            "            \"type\": \"string\",\n" +
+            "            \"stringCharset\": \"GBK\",\n" +
+            "            \"regexStr\": \"^[\u4e00-\u9fa5_a-zA-Z0-9]+$\",\n" +
+            "            \"stringLengthMin\": 3,\n" +
+            "            \"stringLengthMax\": 12,\n" +
+            "        }}", "student.user_name", "\"胡_hhh\"");
+
+        if(result.length != 0) {
+            throw Error("出现错误")
+        }
+        console.log("验证成功")
+
+
+
+        result = testHxValidator("{'student.user_name': {" +
+            "            'fieldKey': \"\",\n" +
+            "            \"type\": \"string\",\n" +
+            "            \"stringCharset\": \"GBK\",\n" +
+            "            \"regexStr\": \"^[\u4e00-\u9fa5_a-zA-Z0-9]+$\",\n" +
+            "            \"stringLengthMin\": 3,\n" +
+            "            \"stringLengthMax\": 12,\n" +
+            "        }}", "student.user_name", "\"hhhhhhhhhhhh\"");
+
+        if(result.length != 0) {
+            throw Error("出现错误")
+        }
+        console.log("验证成功")
+
+
+
+        result = testHxValidator("{'student.user_name': {" +
+            "            'fieldKey': \"\",\n" +
+            "            \"type\": \"string\",\n" +
+            "            \"stringCharset\": \"GBK\",\n" +
+            "            \"regexStr\": \"^[\u4e00-\u9fa5_a-zA-Z0-9]+$\",\n" +
+            "            \"stringLengthMin\": 3,\n" +
+            "            \"stringLengthMax\": 12,\n" +
+            "        }}", "student.user_name", "\"胡胡胡胡胡胡\"");
+
+        if(result.length != 0) {
+            throw Error("出现错误")
+        }
+        console.log("验证成功")
+
+
+        result = testHxValidator("{'student.user_name': {" +
+            "            'fieldKey': \"\",\n" +
+            "            \"type\": \"string\",\n" +
+            "            \"stringCharset\": \"GBK\",\n" +
+            "            \"regexStr\": \"^[\u4e00-\u9fa5_a-zA-Z0-9]+$\",\n" +
+            "            \"stringLengthMin\": 3,\n" +
+            "            \"stringLengthMax\": 12,\n" +
+            "        }}", "student.user_name", "\"胡胡胡胡胡胡h\"");
+
+        if(result.length == 0) {
+            throw Error("出现错误")
+        }
+        console.log("验证成功")
+
+
+        result = testHxValidator("{'student.user_name': {" +
+            "            'fieldKey': \"\",\n" +
+            "            \"type\": \"string\",\n" +
+            "            \"stringCharset\": \"GBK\",\n" +
+            "            \"regexStr\": \"^[\u4e00-\u9fa5_a-zA-Z0-9]+$\",\n" +
+            "            \"stringLengthMin\": 3,\n" +
+            "            \"stringLengthMax\": 12,\n" +
+            "        }}", "student.user_name", "\"hh\"");
+
+        if(result.length == 0) {
+            throw Error("出现错误")
+        }
+        console.log("验证成功")
+
+
+        result = testHxValidator("{'student.user_name': {" +
+            "            'fieldKey': \"\",\n" +
+            "            \"type\": \"string\",\n" +
+            "            \"stringCharset\": \"GBK\",\n" +
+            "            \"regexStr\": \"^[\u4e00-\u9fa5_a-zA-Z0-9]+$\",\n" +
+            "            \"stringLengthMin\": 3,\n" +
+            "            \"stringLengthMax\": 12,\n" +
+            "        }}", "student.user_name", "\"胡*\"");
+
+        if(result.length == 0) {
+            throw Error("出现错误")
+        }
+        console.log("验证成功")
+
+
+        result = testHxValidator("{'student.user_name': {" +
+            "            'fieldKey': \"\",\n" +
+            "            \"type\": \"string\",\n" +
+            "            \"stringCharset\": \"GBK\",\n" +
+            "            \"regexStr\": \"^[\u4e00-\u9fa5_a-zA-Z0-9]+$\",\n" +
+            "            \"stringLengthMin\": 3,\n" +
+            "            \"stringLengthMax\": 12,\n" +
+            "        }}", "student.user_name", "\"hhhhhhhhhhhhh\"");
+
+        if(result.length == 0) {
+            throw Error("出现错误")
+        }
+        console.log("验证成功")
+
+        console.groupEnd()
+    }
+
+
+    function dateTest() {
+        console.group("dateTest")
+        let result = testHxValidator("{'student.birthday': {" +
+            "            'fieldKey': \"\",\n" +
+            "            \"type\": \"date\",\n" +
+            "            \"beginAt\": \"2021-10-01\",\n" +
+            "            \"endAt\": \"2024-12-26\",\n" +
+            "        }}", "student.birthday", "\"2021-10-01\"");
+
+        if(result.length != 0) {
+            throw Error("出现错误")
+        }
+        console.log("验证成功")
+
+
+        /**
+         * 异常流程
+         */
+        result = testHxValidator("{'student.birthday': {" +
+            "            'fieldKey': \"\",\n" +
+            "            \"type\": \"date\",\n" +
+            "            \"beginAt\": \"2021-10-01\",\n" +
+            "            \"endAt\": \"2024-12-26\",\n" +
+            "        }}", "student.birthday", "\"2021-09-30\"");
+
+        if(result.length == 0) {
+            throw Error("出现错误")
+        }
+        console.log("验证成功")
+
+
+        result = testHxValidator("{'student.birthday': {" +
+            "            'fieldKey': \"\",\n" +
+            "            \"type\": \"date\",\n" +
+            "            \"beginAt\": \"2021-10-01\",\n" +
+            "            \"endAt\": \"2024-12-26\",\n" +
+            "        }}", "student.birthday", "\"2024-12-26\"");
+
+        if(result.length == 0) {
+            throw Error("出现错误")
+        }
+        console.log("验证成功")
+
+
+        result = testHxValidator("{'student.birthday': {" +
+            "            'fieldKey': \"\",\n" +
+            "            \"type\": \"date\",\n" +
+            "            \"beginAt\": \"2021-10-01\",\n" +
+            "            \"endAt\": \"2024-12-26\",\n" +
+            "        }}", "student.birthday", "\"2024-12-\"");
+
+        if(result.length == 0) {
+            throw Error("出现错误")
+        }
+        console.log("验证成功")
+
+
+        result = testHxValidator("{'student.birthday': {" +
+            "            'fieldKey': \"\",\n" +
+            "            \"type\": \"date\",\n" +
+            "            \"beginAt\": \"2021-10-01\",\n" +
+            "            \"endAt\": \"2024-12-26\",\n" +
+            "        }}", "student.birthday", "\"2024-12-1\"");
+
+        if(result.length == 0) {
+            throw Error("出现错误")
+        }
+        console.log("验证成功")
+
+        console.groupEnd()
+    }
+
+    /**
+     *
+     */
+    function datetimeTest() {
+        console.group("datetimeTest")
+        let result = testHxValidator("{'student.birthday': {" +
+            "            'fieldKey': \"\",\n" +
+            "            \"type\": \"datetime\",\n" +
+            "            \"beginAt\": \"2021-10-01 01:20:12\",\n" +
+            "            \"endAt\": \"2024-12-26 20:10:59\",\n" +
+            "        }}", "student.birthday", "\"2021-10-01 01:20:12\"");
+
+        if(result.length != 0) {
+            throw Error("出现错误")
+        }
+        console.log("验证成功")
+
+
+        result = testHxValidator("{'student.birthday': {" +
+            "            'fieldKey': \"\",\n" +
+            "            \"type\": \"datetime\",\n" +
+            "            \"beginAt\": \"2021-10-01 01:20:12\",\n" +
+            "        }}", "student.birthday", "\"2021-12-01 01:20:12\"");
+
+        if(result.length != 0) {
+            throw Error("出现错误")
+        }
+        console.log("验证成功")
+
+
+        result = testHxValidator("{'student.birthday': {" +
+            "            'fieldKey': \"\",\n" +
+            "            \"type\": \"datetime\",\n" +
+            "            \"endAt\": \"2024-12-26 20:10:59\",\n" +
+            "        }}", "student.birthday", "\"2021-10-01 01:20:12\"");
+
+        if(result.length != 0) {
+            throw Error("出现错误")
+        }
+        console.log("验证成功")
+
+        /**
+         * 异常流程
+         */
+        result = testHxValidator("{'student.birthday': {" +
+            "            'fieldKey': \"\",\n" +
+            "            \"type\": \"datetime\",\n" +
+            "            \"beginAt\": \"2021-10-01 01:20:12\",\n" +
+            "            \"endAt\": \"2024-12-26 20:10:59\",\n" +
+            "        }}", "student.birthday", "\"2021-10-01 01:20:11\"");
+
+        if(result.length == 0) {
+            throw Error("出现错误")
+        }
+        console.log("验证成功")
+
+
+        result = testHxValidator("{'student.birthday': {" +
+            "            'fieldKey': \"\",\n" +
+            "            \"type\": \"datetime\",\n" +
+            "            \"beginAt\": \"2021-10-01 01:20:12\",\n" +
+            "            \"endAt\": \"2024-12-26 20:10:59\",\n" +
+            "        }}", "student.birthday", "\"2024-12-26 20:10:59\"");
+
+        if(result.length == 0) {
+            throw Error("出现错误")
+        }
+        console.log("验证成功")
+
+
+        result = testHxValidator("{'student.birthday': {" +
+            "            'fieldKey': \"\",\n" +
+            "            \"type\": \"datetime\",\n" +
+            "            \"beginAt\": \"2021-10-01 01:20:12\",\n" +
+            "            \"endAt\": \"2024-12-26 20:10:59\",\n" +
+            "        }}", "student.birthday", "\"2024-12-25 20:10:\"");
+
+        if(result.length == 0) {
+            throw Error("出现错误")
+        }
+        console.log("验证成功")
+
+
+        result = testHxValidator("{'student.birthday': {" +
+            "            'fieldKey': \"\",\n" +
+            "            \"type\": \"datetime\",\n" +
+            "            \"beginAt\": \"2021-10-01 01:20:12\",\n" +
+            "            \"endAt\": \"2024-12-26 20:10:59\",\n" +
+            "        }}", "student.birthday", "\"2024-12-25 20:10:1\"");
+
+        if(result.length == 0) {
+            throw Error("出现错误")
+        }
+        console.log("验证成功")
+
+
+        console.groupEnd()
+    }
+
+</script>
+</html>

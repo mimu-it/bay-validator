@@ -75,8 +75,15 @@ public class DateFieldRule extends FieldRule {
             return false;
         }
 
-        Date beginAt = zeroTime(super.getBeginAt());
-        Date endAt = zeroTime(super.getEndAt());
+        Date beginAt = null;
+        if(super.getBeginAt() != null) {
+            beginAt = zeroTime(super.getBeginAt());
+        }
+
+        Date endAt = null;
+        if(super.getEndAt() != null) {
+            endAt = zeroTime(super.getEndAt());
+        }
 
         if(beginAt != null && endAt != null) {
             return (date.equals(beginAt) || date.after(beginAt)) && (date.before(endAt));
@@ -90,7 +97,7 @@ public class DateFieldRule extends FieldRule {
             return date.before(endAt);
         }
 
-        return false;
+        return true;
     }
 
 

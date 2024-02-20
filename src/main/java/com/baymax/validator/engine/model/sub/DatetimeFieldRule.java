@@ -20,7 +20,7 @@ public class DatetimeFieldRule extends FieldRule {
     private static SimpleDateFormat datetimeFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     static {
         /** yaml.loadAs 默认会把日期字符串转换为Date  会变成 08:00:00 */
-        datetimeFormat.setTimeZone(TimeZone.getTimeZone("UTC"));
+        datetimeFormat.setTimeZone(TimeZone.getDefault());
     }
 
     @Override
@@ -91,6 +91,6 @@ public class DatetimeFieldRule extends FieldRule {
             return date.before(endAt);
         }
 
-        return false;
+        return true;
     }
 }

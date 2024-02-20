@@ -85,6 +85,42 @@ public class DateFieldRuleTest {
         Assert.assertTrue(true);
     }
 
+    @Test
+    public void testLegal_3() {
+        try {
+            HxValidator.builder().validate("student.birthday2", "2021-10-03");
+        } catch (Exception e) {
+            Assert.assertTrue(false);
+            return;
+        }
+
+        Assert.assertTrue(true);
+    }
+
+    @Test
+    public void testLegal_4() {
+        try {
+            HxValidator.builder().validate("student.birthday3", "2024-12-19");
+        } catch (Exception e) {
+            Assert.assertTrue(false);
+            return;
+        }
+
+        Assert.assertTrue(true);
+    }
+
+    @Test
+    public void testLegal_5() {
+        try {
+            HxValidator.builder().validate("student.birthday4", "2024-12-19");
+        } catch (Exception e) {
+            Assert.assertTrue(false);
+            return;
+        }
+
+        Assert.assertTrue(true);
+    }
+
     /**
      * 异常流程逻辑
      */
@@ -107,6 +143,43 @@ public class DateFieldRuleTest {
     public void testIllegal_2() {
         try {
             HxValidator.builder().validate("student.birthday", "2021-09-30");
+        } catch (Exception e) {
+            Assert.assertTrue(true);
+            return;
+        }
+
+        Assert.assertTrue(false);
+    }
+
+
+    @Test
+    public void testIllegal_3() {
+        try {
+            HxValidator.builder().validate("student.birthday2", "2021-10-01");
+        } catch (Exception e) {
+            Assert.assertTrue(true);
+            return;
+        }
+
+        Assert.assertTrue(false);
+    }
+
+    @Test
+    public void testIllegal_4() {
+        try {
+            HxValidator.builder().validate("student.birthday3", "2024-12-21");
+        } catch (Exception e) {
+            Assert.assertTrue(true);
+            return;
+        }
+
+        Assert.assertTrue(false);
+    }
+
+    @Test
+    public void testIllegal_5() {
+        try {
+            HxValidator.builder().validate("student.birthday4", "2024-12-");
         } catch (Exception e) {
             Assert.assertTrue(true);
             return;

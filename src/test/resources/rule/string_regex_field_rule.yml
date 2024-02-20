@@ -1,0 +1,13 @@
+student:
+  user_name:
+    type: string
+    string_charset: utf8
+    string_regex_key: only_chinese_and_english_and_underline
+    string_length_min: 3
+    string_length_max: 12
+  user_name_gbk:
+    type: string
+    string_charset: GBK
+    string_regex_key: only_chinese_and_english_and_underline
+    string_length_min: 3
+    string_length_max: 12

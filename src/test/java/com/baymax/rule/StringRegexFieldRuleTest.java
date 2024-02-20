@@ -7,16 +7,14 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.util.HashSet;
 
 /**
  * @author xiao.hu
- * @date 2024-02-19
+ * @date 2024-02-20
  * @apiNote
  */
-public class DatetimeFieldRuleTest {
+public class StringRegexFieldRuleTest {
 
     /**
      * 初始化
@@ -26,7 +24,7 @@ public class DatetimeFieldRuleTest {
         HxValidator.Engine.create()
                 .dbType(DataBaseType.mysql)
                 .commonRules("value_rules_common.yml")
-                .rules("rule/datetime_field_rule.yml")
+                .rules("rule/string_regex_field_rule.yml")
                 .ruleDict("common_dict.yml")
                 .ignoreKeys(new HashSet<String>() {{
                     add("id");
@@ -45,9 +43,9 @@ public class DatetimeFieldRuleTest {
      * 正常流程逻辑
      */
     @Test
-    public void testLegal_0() {
+    public void testLegal_1() {
         try {
-            HxValidator.builder().validate("student.birthday", "2023-11-11 10:00:00");
+            HxValidator.builder().validate("student.user_name", "胡晓");
         } catch (Exception e) {
             Assert.assertTrue(false);
             return;
@@ -57,28 +55,13 @@ public class DatetimeFieldRuleTest {
     }
 
     /**
-     *
+     * 正常流程逻辑
      */
-    @Test
-    public void testLegal_1() {
-        LocalDateTime localDateTime = LocalDateTime.of(2023, 11, 11, 10, 0, 0)
-                .atZone(ZoneId.of("UTC")).toLocalDateTime();
-
-        try {
-            HxValidator.builder().validate("student.birthday", localDateTime);
-        } catch (Exception e) {
-            Assert.assertTrue(false);
-            return;
-        }
-
-        Assert.assertTrue(true);
-    }
-
-
     @Test
     public void testLegal_2() {
         try {
-            HxValidator.builder().validate("student.birthday2", "2021-10-02 01:20:12");
+            /** 3*2 + 6 = 12 */
+            HxValidator.builder().validate("student.user_name", "胡晓_huxia");
         } catch (Exception e) {
             Assert.assertTrue(false);
             return;
@@ -87,10 +70,13 @@ public class DatetimeFieldRuleTest {
         Assert.assertTrue(true);
     }
 
+    /**
+     * 正常流程逻辑
+     */
     @Test
     public void testLegal_3() {
         try {
-            HxValidator.builder().validate("student.birthday3", "2024-12-20 20:10:58");
+            HxValidator.builder().validate("student.user_name", "胡");
         } catch (Exception e) {
             Assert.assertTrue(false);
             return;
@@ -99,11 +85,13 @@ public class DatetimeFieldRuleTest {
         Assert.assertTrue(true);
     }
 
-
+    /**
+     * 正常流程逻辑
+     */
     @Test
     public void testLegal_4() {
         try {
-            HxValidator.builder().validate("student.birthday4", "2024-12-20 20:10:58");
+            HxValidator.builder().validate("student.user_name", "hhh");
         } catch (Exception e) {
             Assert.assertTrue(false);
             return;
@@ -112,14 +100,14 @@ public class DatetimeFieldRuleTest {
         Assert.assertTrue(true);
     }
 
-
     /**
-     * 异常流程逻辑
+     * 异常逻辑
+     * 超过长度
      */
     @Test
     public void testIllegal_1() {
         try {
-            HxValidator.builder().validate("student.birthday", "2021-10-01 01:20:11");
+            HxValidator.builder().validate("student.user_name", "胡晓_huxiao");
         } catch (Exception e) {
             Assert.assertTrue(true);
             return;
@@ -129,12 +117,13 @@ public class DatetimeFieldRuleTest {
     }
 
     /**
-     * 异常流程逻辑
+     * 异常逻辑
+     * 长度短了
      */
     @Test
     public void testIllegal_2() {
         try {
-            HxValidator.builder().validate("student.birthday", "2024-12-26 20:11:00");
+            HxValidator.builder().validate("student.user_name", "hh");
         } catch (Exception e) {
             Assert.assertTrue(true);
             return;
@@ -143,56 +132,15 @@ public class DatetimeFieldRuleTest {
         Assert.assertTrue(false);
     }
 
+
     /**
-     * 异常流程逻辑
+     * 异常逻辑
+     * 正则表达式，必须是中文开头
      */
     @Test
     public void testIllegal_3() {
         try {
-            HxValidator.builder().validate("student.birthday", "2024-12-26 20:10:59");
-        } catch (Exception e) {
-            Assert.assertTrue(true);
-            return;
-        }
-
-        Assert.assertTrue(false);
-    }
-
-
-    /**
-     * 异常流程逻辑
-     */
-    @Test
-    public void testIllegal_4() {
-        try {
-            HxValidator.builder().validate("student.birthday2", "2021-10-02 01:20:11");
-        } catch (Exception e) {
-            Assert.assertTrue(true);
-            return;
-        }
-
-        Assert.assertTrue(false);
-    }
-
-    /**
-     * 异常流程逻辑
-     */
-    @Test
-    public void testIllegal_5() {
-        try {
-            HxValidator.builder().validate("student.birthday3", "2024-12-20 20:10:59");
-        } catch (Exception e) {
-            Assert.assertTrue(true);
-            return;
-        }
-
-        Assert.assertTrue(false);
-    }
-
-    @Test
-    public void testIllegal_6() {
-        try {
-            HxValidator.builder().validate("student.birthday4", "2024-12-");
+            HxValidator.builder().validate("student.user_name", "hh*");
         } catch (Exception e) {
             Assert.assertTrue(true);
             return;

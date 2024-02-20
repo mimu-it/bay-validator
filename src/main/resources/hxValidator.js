@@ -1,4 +1,4 @@
-function testHxValidator(fieldConfigStr, key, valueStr) {
+export function testHxValidator(fieldConfigStr, key, valueStr) {
     /**
      * 必须使用字符串传入配置，
      * 不然Object.prototype.toString.call(obj)将返回java对象，而不是js对象
@@ -26,7 +26,7 @@ function testStringLength(fieldConfigStr, key, valueStr) {
 }
 
 
-function HxValidator(fieldConfig) {
+export function HxValidator(fieldConfig) {
     this.fieldConfig = fieldConfig;
     return this;
 }
@@ -41,14 +41,50 @@ HxValidator.prototype = {
         debug : function(str) {
             //print(str); 不能在页面使用，不然会触发打印功能
         },
+        isNone : function(o) {
+            return o == undefined || o == null;
+        },
         isString : function(obj) {
             return Object.prototype.toString.call(obj) === "[object String]" ;    // [object String]
         },
         isNumber : function(obj) {
             return Object.prototype.toString.call(obj) === "[object Number]" ;    // [object Number]
         },
-        isArray: function(obj) {
+        isArray : function(obj) {
             return Object.prototype.toString.call(obj) == "[object Array]";
+        },
+        checkDateStr : function(strDate){
+            if(strDate == undefined || strDate == null) {
+                return false;
+            }
+
+            if(strDate.length > 0){
+                let reg= /^(\d+)-(\d{2})-(\d{2})$/;
+                if(reg.test(strDate)){
+                    return true;
+                }
+            }
+            return false;
+        },
+        checkDatetimeStr : function(strDate){
+            if(strDate == undefined || strDate == null) {
+                return false;
+            }
+
+            if(strDate.length > 0){
+                let reg= /^(\d+)-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/;
+                if(reg.test(strDate)){
+                    return true;
+                }
+            }
+            return false;
+        },
+        /** new Date("2018-22-33") 返回Date类型，但是是invalid Date, 所以需要借助getTime()来判断 */
+        isValidDate : function(date) {
+            if(date == undefined || date == null) {
+                return false;
+            }
+            return date instanceof Date && !isNaN(date.getTime())
         },
         whatType: function(obj) {
             return Object.prototype.toString.call(obj);
@@ -146,16 +182,34 @@ HxValidator.prototype = {
             return "";
         }
 
-
-        /** 数值型检测 */
-        let checkList = [this.range__checker];
-        for (let i = 0; i < checkList.length; i++) {
-            let checker = checkList[i];
-            let errorCode = checker.call(this, configJson, value);
-            if (errorCode.length != 0) {
-                return errorCode;
+        if(configJson.type === "numeric") {
+            /** 数值型检测 */
+            let checkList = [this.range__checker];
+            for (let i = 0; i < checkList.length; i++) {
+                let checker = checkList[i];
+                let errorCode = checker.call(this, configJson, value);
+                if (errorCode.length != 0) {
+                    return errorCode;
+                }
             }
+
+            return "";
         }
+
+        if(configJson.type === "date" || configJson.type === "datetime") {
+            /** 时间型检测 */
+            let checkList = [this.date__checker];
+            for (let i = 0; i < checkList.length; i++) {
+                let checker = checkList[i];
+                let errorCode = checker.call(this, configJson, value);
+                if (errorCode.length != 0) {
+                    return errorCode;
+                }
+            }
+
+            return "";
+        }
+
         return "";
     },
     range__checker: function(config, value) {
@@ -359,5 +413,50 @@ HxValidator.prototype = {
         }
 
         return "未配置枚举取值范围";
+    },
+    /** 日期类型校验检测 */
+    date__checker: function(config, value) {
+        let kit = this.kit;
+        if(kit.isNone(value)) {
+            return "日期值为空";
+        }
+
+        if(typeof value == 'string') {
+            if(config.type === "date" && !kit.checkDateStr(value)) {
+                return "日期值不规范";
+            }
+            else if(config.type === "datetime" && !kit.checkDatetimeStr(value)) {
+                return "日期值不规范";
+            }
+        }
+
+        /** 可以使用 new Date(new Date()) */
+        let beginAt = config.beginAt && new Date(config.beginAt);
+        let endAt = config.endAt && new Date(config.endAt);
+
+        let valueDate = new Date(value);
+
+        if(kit.isValidDate(beginAt) && kit.isValidDate(endAt)) {
+            if((valueDate.getTime() >= beginAt.getTime()) && (valueDate.getTime() < endAt.getTime())){
+                return "";
+            }
+            return "日期值校验失败";
+        }
+
+        if(kit.isValidDate(beginAt)) {
+            if(valueDate.getTime() >= beginAt.getTime()) {
+                return "";
+            }
+            return "日期值校验失败";
+        }
+
+        if(kit.isValidDate(endAt)) {
+            if(valueDate.getTime() < endAt.getTime()) {
+                return "";
+            }
+            return "日期值校验失败";
+        }
+
+        return "日期值校验失败";
     }
 }

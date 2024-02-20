@@ -1,0 +1,5 @@
+student:
+  age:
+    type: numeric
+    numeric_min: 0
+    numeric_max: 120
