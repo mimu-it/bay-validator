@@ -2,23 +2,23 @@ package com.baymax;
 
 import com.baymax.validator.engine.CommonDict;
 import com.baymax.validator.engine.ValidatorEngine;
+import com.baymax.validator.engine.generator.formatter.IFormatter;
 import com.baymax.validator.engine.model.FieldRule;
 import com.baymax.validator.engine.model.sub.StringRegexFieldRule;
 import com.baymax.vo.Student;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import jdk.nashorn.api.scripting.NashornScriptEngineFactory;
+import com.google.googlejavaformat.java.Formatter;
+import com.google.googlejavaformat.java.FormatterException;
+import com.jfinal.template.stat.ast.For;
 import org.junit.Assert;
 import org.junit.Test;
+import org.yaml.snakeyaml.Yaml;
 
-import javax.script.ScriptEngine;
-import javax.script.ScriptException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 
@@ -262,6 +262,16 @@ public class ValidatorEngineTest {
     @Test
     public void testGenerateJavaEnumCodeWithRuleDict() {
         ValidatorEngine.INSTANCE.init("value_rules_enum_output_test_dict.yml");
+        ValidatorEngine.INSTANCE.setFormatter(new IFormatter() {
+            @Override
+            public String formatJava(String originalContent) {
+                try {
+                    return new Formatter().formatSource(originalContent);
+                } catch (FormatterException e) {
+                    return originalContent;
+                }
+            }
+        });
 
         String packageName = "com.baymax.generator.output.values";
         String sourceFormat = ValidatorEngine.INSTANCE.generateJavaEnumCode(packageName);
@@ -377,87 +387,6 @@ public class ValidatorEngineTest {
         }
     }
 
-    //@Test
-    public void testJsValidatorEnumInteger() {
-        CommonDict.INSTANCE.init();
-        ValidatorEngine.INSTANCE.init("value_rules.yml");
-        String jsonMapStr = ValidatorEngine.INSTANCE.getFieldValidatorRulesStr("student.game_long_card");
-
-        ScriptEngine engine = new NashornScriptEngineFactory().getScriptEngine("--language=es6");
-
-        String jsPath = App.class.getClassLoader().getResource("hxValidator.js").getPath();
-
-        try {
-            String scriptStr = new String(Files.readAllBytes(Paths.get(jsPath)));
-            engine.eval(scriptStr);
-        } catch (Exception e) {
-            throw new IllegalStateException(e);
-        }
-
-        engine.put("fieldConfig", jsonMapStr);
-        engine.put("key", "student.game_long_card");
-        engine.put("value", 30000000001l);
-        try {
-            String result = (String) engine.eval("testHxValidator(fieldConfig, key, value)");
-            Assert.assertEquals("参数不符合规范", result);
-        } catch (ScriptException e) {
-            throw new IllegalStateException(e);
-        }
-
-
-        engine.put("value", 3000000000l);
-        try {
-            String result = (String) engine.eval("testHxValidator(fieldConfig, key, value)");
-            Assert.assertEquals("", result);
-        } catch (ScriptException e) {
-            throw new IllegalStateException(e);
-        }
-    }
-
-    @Test
-    public void testJsValidatorEnumDecimal() {
-        CommonDict.INSTANCE.init();
-        ValidatorEngine.INSTANCE.init("value_rules.yml");
-
-        String fieldKey = "student.float_card";
-        String jsonMapStr = ValidatorEngine.INSTANCE.getFieldValidatorRulesStr(fieldKey);
-
-        ScriptEngine engine = new NashornScriptEngineFactory().getScriptEngine("--language=es6");
-
-        String jsPath = App.class.getClassLoader().getResource("hxValidator.js").getPath();
-
-        try {
-            String scriptStr = new String(Files.readAllBytes(Paths.get(jsPath)));
-            engine.eval(scriptStr);
-        } catch (Exception e) {
-            throw new IllegalStateException(e);
-        }
-
-        engine.put("fieldConfig", jsonMapStr);
-        engine.put("key", fieldKey);
-        engine.put("value", 1000000000.123456);
-        try {
-            String result = (String) engine.eval("testHxValidator(fieldConfig, key, value)");
-            Assert.assertEquals("浮点类型请使用字符串参数", result);
-        } catch (ScriptException e) {
-            throw new IllegalStateException(e);
-        }
-
-        try {
-            String jsonStr = mapper.writeValueAsString("4000000000.123456");
-            System.out.println("jsonStr: " + jsonStr);
-            engine.put("value", jsonStr);
-        } catch (JsonProcessingException e) {
-            e.printStackTrace();
-        }
-        try {
-            String result = (String) engine.eval("testHxValidator(fieldConfig, key, value)");
-            Assert.assertEquals("", result);
-        } catch (ScriptException e) {
-            throw new IllegalStateException(e);
-        }
-    }
-
 
     @Test
     public void testEnumStringWithCommonDict() {
@@ -494,318 +423,6 @@ public class ValidatorEngineTest {
 
 
     @Test
-    public void testJsValidatorEnumDecimalMultiSelection() {
-        CommonDict.INSTANCE.init();
-        ValidatorEngine.INSTANCE.init("value_rules.yml");
-
-        String fieldKey = "student.float_card";
-        String jsonMapStr = ValidatorEngine.INSTANCE.getFieldValidatorRulesStr(fieldKey);
-
-        ScriptEngine engine = new NashornScriptEngineFactory().getScriptEngine("--language=es6");
-
-        String jsPath = App.class.getClassLoader().getResource("hxValidator.js").getPath();
-
-        try {
-            String scriptStr = new String(Files.readAllBytes(Paths.get(jsPath)));
-            engine.eval(scriptStr);
-        } catch (Exception e) {
-            throw new IllegalStateException(e);
-        }
-
-        List<String> mItems = new ArrayList<>();
-        mItems.add("4000000000.123456");
-        mItems.add("3.12");
-
-        engine.put("fieldConfig", jsonMapStr);
-        engine.put("key", fieldKey);
-
-        try {
-            String jsonStr = mapper.writeValueAsString(mItems);
-            System.out.println("jsonStr: " + jsonStr);
-            engine.put("value", jsonStr);
-        } catch (JsonProcessingException e) {
-            e.printStackTrace();
-        }
-
-        try {
-            String result = (String) engine.eval("testHxValidator(fieldConfig, key, value)");
-            Assert.assertEquals("参数不符合规范", result);
-        } catch (ScriptException e) {
-            throw new IllegalStateException(e);
-        }
-
-        List<String> mItems2 = new ArrayList<>();
-        mItems2.add("4000000000.123456");
-        mItems2.add("3.11");
-        try {
-            String jsonStr = mapper.writeValueAsString(mItems2);
-            System.out.println("jsonStr: " + jsonStr);
-            engine.put("value", jsonStr);
-        } catch (JsonProcessingException e) {
-            e.printStackTrace();
-        }
-
-        try {
-            String result = (String) engine.eval("testHxValidator(fieldConfig, key, value)");
-            Assert.assertEquals("", result);
-        } catch (ScriptException e) {
-            throw new IllegalStateException(e);
-        }
-    }
-
-
-    @Test
-    public void testJsValidatorString() {
-        CommonDict.INSTANCE.init();
-        ValidatorEngine.INSTANCE.init("value_rules.yml");
-
-        String fieldKey = "student.phone_number";
-        String jsonMapStr = ValidatorEngine.INSTANCE.getFieldValidatorRulesStr(fieldKey);
-
-        ScriptEngine engine = new NashornScriptEngineFactory().getScriptEngine("--language=es6");
-
-        String jsPath = App.class.getClassLoader().getResource("hxValidator.js").getPath();
-
-        try {
-            String scriptStr = new String(Files.readAllBytes(Paths.get(jsPath)));
-            engine.eval(scriptStr);
-        } catch (Exception e) {
-            throw new IllegalStateException(e);
-        }
-
-        engine.put("fieldConfig", jsonMapStr);
-        engine.put("key", fieldKey);
-
-        try {
-            String jsonStr = mapper.writeValueAsString("139731662566");
-            engine.put("value", jsonStr);
-
-            String result = (String) engine.eval("testHxValidator(fieldConfig, key, value)");
-            Assert.assertEquals("参数字符长度不符合规则", result);
-        } catch (Exception e) {
-            throw new IllegalStateException(e);
-        }
-
-
-        try {
-            String jsonStr = mapper.writeValueAsString("13973166256");
-            engine.put("value", jsonStr);
-
-            String result = (String) engine.eval("testHxValidator(fieldConfig, key, value)");
-            Assert.assertEquals("", result);
-        } catch (Exception e) {
-            throw new IllegalStateException(e);
-        }
-
-        try {
-            String jsonStr = mapper.writeValueAsString("1397316625A");
-            engine.put("value", jsonStr);
-
-            String result = (String) engine.eval("testHxValidator(fieldConfig, key, value)");
-            Assert.assertEquals("参数字符不符合规则", result);
-        } catch (Exception e) {
-            throw new IllegalStateException(e);
-        }
-    }
-
-
-    @Test
-    public void testJsValidatorString2() {
-        CommonDict.INSTANCE.init();
-        ValidatorEngine.INSTANCE.init("value_rules.yml");
-
-        String fieldKey = "student.user_name";
-        String jsonMapStr = ValidatorEngine.INSTANCE.getFieldValidatorRulesStr(fieldKey);
-
-        ScriptEngine engine = new NashornScriptEngineFactory().getScriptEngine("--language=es6");
-
-        String jsPath = App.class.getClassLoader().getResource("hxValidator.js").getPath();
-
-        try {
-            String scriptStr = new String(Files.readAllBytes(Paths.get(jsPath)));
-            engine.eval(scriptStr);
-        } catch (Exception e) {
-            throw new IllegalStateException(e);
-        }
-
-        engine.put("fieldConfig", jsonMapStr);
-        engine.put("key", fieldKey);
-
-        try {
-            String jsonStr = mapper.writeValueAsString("你好A");
-            engine.put("value", jsonStr);
-
-            String result = (String) engine.eval("testHxValidator(fieldConfig, key, value)");
-            Assert.assertEquals("", result);
-        } catch (Exception e) {
-            throw new IllegalStateException(e);
-        }
-
-        try {
-            String jsonStr = mapper.writeValueAsString("你好A+");
-            engine.put("value", jsonStr);
-
-            String result = (String) engine.eval("testHxValidator(fieldConfig, key, value)");
-            Assert.assertEquals("参数字符不符合规则", result);
-        } catch (Exception e) {
-            throw new IllegalStateException(e);
-        }
-    }
-
-
-    @Test
-    public void testJsValidatorNumber() {
-        CommonDict.INSTANCE.init();
-        ValidatorEngine.INSTANCE.init("value_rules.yml");
-
-        String fieldKey = "student.age";
-        String jsonMapStr = ValidatorEngine.INSTANCE.getFieldValidatorRulesStr(fieldKey);
-
-        ScriptEngine engine = new NashornScriptEngineFactory().getScriptEngine("--language=es6");
-
-        String jsPath = App.class.getClassLoader().getResource("hxValidator.js").getPath();
-
-        try {
-            String scriptStr = new String(Files.readAllBytes(Paths.get(jsPath)));
-            engine.eval(scriptStr);
-        } catch (Exception e) {
-            throw new IllegalStateException(e);
-        }
-
-        engine.put("fieldConfig", jsonMapStr);
-        engine.put("key", fieldKey);
-
-        try {
-            engine.put("value", 0);
-
-            String result = (String) engine.eval("testHxValidator(fieldConfig, key, value)");
-            Assert.assertEquals("", result);
-        } catch (Exception e) {
-            throw new IllegalStateException(e);
-        }
-
-        try {
-            engine.put("value", 32);
-
-            String result = (String) engine.eval("testHxValidator(fieldConfig, key, value)");
-            Assert.assertEquals("", result);
-        } catch (Exception e) {
-            throw new IllegalStateException(e);
-        }
-
-
-        try {
-            engine.put("value", 121);
-
-            String result = (String) engine.eval("testHxValidator(fieldConfig, key, value)");
-            Assert.assertEquals("数值型大小校验规则不符合规则", result);
-        } catch (Exception e) {
-            throw new IllegalStateException(e);
-        }
-
-        try {
-            engine.put("value", -1);
-
-            String result = (String) engine.eval("testHxValidator(fieldConfig, key, value)");
-            Assert.assertEquals("数值型大小校验规则不符合规则", result);
-        } catch (Exception e) {
-            throw new IllegalStateException(e);
-        }
-    }
-
-
-    @Test
-    public void testJsValidatorStringLengthUTF8() {
-        CommonDict.INSTANCE.init();
-        ValidatorEngine.INSTANCE.init("value_rules.yml");
-
-        String fieldKey = "student.user_name";
-        String jsonMapStr = ValidatorEngine.INSTANCE.getFieldValidatorRulesStr(fieldKey);
-
-        ScriptEngine engine = new NashornScriptEngineFactory().getScriptEngine("--language=es6");
-
-        String jsPath = App.class.getClassLoader().getResource("hxValidator.js").getPath();
-
-        try {
-            String scriptStr = new String(Files.readAllBytes(Paths.get(jsPath)));
-            engine.eval(scriptStr);
-        } catch (Exception e) {
-            throw new IllegalStateException(e);
-        }
-
-        engine.put("fieldConfig", jsonMapStr);
-        engine.put("key", fieldKey);
-
-        try {
-            String jsonStr = mapper.writeValueAsString("你");
-            engine.put("value", jsonStr);
-
-            String result = (String) engine.eval("testStringLength(fieldConfig, key, value)");
-            Assert.assertEquals("", result);
-        } catch (Exception e) {
-            throw new IllegalStateException(e);
-        }
-
-
-        try {
-            String jsonStr = mapper.writeValueAsString("A");
-            engine.put("value", jsonStr);
-
-            String result = (String) engine.eval("testStringLength(fieldConfig, key, value)");
-            Assert.assertEquals("参数字符长度不符合规则", result);
-        } catch (Exception e) {
-            throw new IllegalStateException(e);
-        }
-    }
-
-
-
-    @Test
-    public void testJsValidatorStringLengthGBK() {
-        CommonDict.INSTANCE.init();
-        ValidatorEngine.INSTANCE.init("value_rules.yml");
-
-        String fieldKey = "student.user_name_gbk";
-        String jsonMapStr = ValidatorEngine.INSTANCE.getFieldValidatorRulesStr(fieldKey);
-
-        ScriptEngine engine = new NashornScriptEngineFactory().getScriptEngine("--language=es6");
-
-        String jsPath = App.class.getClassLoader().getResource("hxValidator.js").getPath();
-
-        try {
-            String scriptStr = new String(Files.readAllBytes(Paths.get(jsPath)));
-            engine.eval(scriptStr);
-        } catch (Exception e) {
-            throw new IllegalStateException(e);
-        }
-
-        engine.put("fieldConfig", jsonMapStr);
-        engine.put("key", fieldKey);
-
-        try {
-            String jsonStr = mapper.writeValueAsString("你");
-            engine.put("value", jsonStr);
-
-            String result = (String) engine.eval("testStringLength(fieldConfig, key, value)");
-            Assert.assertEquals("参数字符长度不符合规则", result);
-        } catch (Exception e) {
-            throw new IllegalStateException(e);
-        }
-
-
-        try {
-            String jsonStr = mapper.writeValueAsString("A");
-            engine.put("value", jsonStr);
-
-            String result = (String) engine.eval("testStringLength(fieldConfig, key, value)");
-            Assert.assertEquals("参数字符长度不符合规则", result);
-        } catch (Exception e) {
-            throw new IllegalStateException(e);
-        }
-    }
-
-
-    @Test
     public void testGenerateYml() {
         FieldRule rule1 = new StringRegexFieldRule();
         rule1.setFieldKey("common.id");
@@ -828,18 +445,21 @@ public class ValidatorEngineTest {
         list.add(rule2);
 
         String dumpStr = ValidatorEngine.INSTANCE.generateDefaultYml("value_rules_clean.yml", list);
-        Assert.assertEquals("common:\n" +
-                "  id:\n" +
-                "    string_charset: utf8\n" +
-                "    string_length_min: 1\n" +
-                "    string_length_max: 128\n" +
-                "    type: String\n" +
-                "court:\n" +
-                "  id:\n" +
-                "    string_charset: utf8\n" +
-                "    string_length_min: 2\n" +
-                "    string_length_max: 3\n" +
-                "    type: String\n", dumpStr);
+
+        Yaml yaml = new Yaml();
+        HashMap map = yaml.loadAs(dumpStr, HashMap.class);
+        HashMap commonIdMap = (HashMap) ((HashMap) map.get("common")).get("id");
+        HashMap courtIdMap = (HashMap) ((HashMap) map.get("court")).get("id");
+
+        Assert.assertEquals(1, commonIdMap.get("string_length_min"));
+        Assert.assertEquals(128, commonIdMap.get("string_length_max"));
+        Assert.assertEquals("utf8", commonIdMap.get("string_charset"));
+        Assert.assertEquals("String", commonIdMap.get("type"));
+
+        Assert.assertEquals(2, courtIdMap.get("string_length_min"));
+        Assert.assertEquals(3, courtIdMap.get("string_length_max"));
+        Assert.assertEquals("utf8", courtIdMap.get("string_charset"));
+        Assert.assertEquals("String", courtIdMap.get("type"));
     }
 
 

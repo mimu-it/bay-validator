@@ -1,9 +1,10 @@
 package com.baymax.validator.engine.generator;
 
-import com.baymax.validator.engine.ValidatorEngine;
 import com.baymax.validator.engine.constant.Const;
 import com.baymax.validator.engine.preset.RuleType;
 import com.baymax.validator.engine.utils.StrUtil;
+import com.google.googlejavaformat.java.Formatter;
+import com.google.googlejavaformat.java.FormatterException;
 import com.jfinal.kit.Kv;
 import com.jfinal.template.Engine;
 
@@ -83,7 +84,9 @@ public class JavaEnumTemplateRender {
                     .set(Const.TemplateKey.valueFormat.name(), formatValueEscapeDot(valStr));
 
             String enumValueStr = engine.getTemplate(Const.ENUM_VALUES_TEMPLATE_FILENAME).renderToString(cond);
-            sb.append(",").append(enumValueStr);
+            if(enumValueStr != null) {
+                sb.append(",").append(enumValueStr.trim());
+            }
         }
 
         if (sb.length() > 0) {
