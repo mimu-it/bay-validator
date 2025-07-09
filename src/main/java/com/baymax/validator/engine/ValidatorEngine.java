@@ -17,7 +17,6 @@ import com.baymax.validator.engine.preset.RuleType;
 import com.baymax.validator.engine.utils.BeanUtil;
 import com.baymax.validator.engine.utils.FileWriter;
 import com.baymax.validator.engine.utils.NameUtil;
-import com.baymax.validator.engine.utils.ParamUtil;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -27,7 +26,6 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.time.DateFormatUtils;
 import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
-
 import org.yaml.snakeyaml.nodes.Tag;
 
 import javax.sql.DataSource;
@@ -45,7 +43,11 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 
 /**
  * @author xiao.hu
@@ -69,16 +71,20 @@ public enum ValidatorEngine {
 	 */
 	Map<String, Map<String, Object>> valueRulesMap;
 	Map<String, Map<String, Object>> commonValueRulesMap;
-	private static Map<String, FieldRule> fieldRuleMap = new HashMap<>();
+
+	/**
+	 * 在 Java 中实现一个 Map 保存类的构造函数，并通过 get 方法每次返回新的实例，可以通过 工厂模式 结合 方法引用 或 Supplier 来实现
+	 */
+	private static Map<String, Supplier<FieldRule>> fieldRuleMap = new HashMap<>();
 	static {
-		fieldRuleMap.put(RuleType.numeric.name(), new NumericFieldRule());
-		fieldRuleMap.put(RuleType.decimal.name(), new DecimalFieldRule());
-		fieldRuleMap.put(RuleType.string.name(), new StringRegexFieldRule());
-		fieldRuleMap.put(RuleType.enum_string.name(), new EnumStringFieldRule());
-		fieldRuleMap.put(RuleType.enum_numeric.name(), new EnumNumericFieldRule<>(BigInteger.class));
-		fieldRuleMap.put(RuleType.enum_decimal.name(), new EnumNumericFieldRule<>(BigDecimal.class));
-		fieldRuleMap.put(RuleType.date.name(), new DateFieldRule());
-		fieldRuleMap.put(RuleType.datetime.name(), new DatetimeFieldRule());
+		fieldRuleMap.put(RuleType.numeric.name(), () -> new NumericFieldRule());
+		fieldRuleMap.put(RuleType.decimal.name(), () -> new DecimalFieldRule());
+		fieldRuleMap.put(RuleType.string.name(), () -> new StringRegexFieldRule());
+		fieldRuleMap.put(RuleType.enum_string.name(), () -> new EnumStringFieldRule());
+		fieldRuleMap.put(RuleType.enum_numeric.name(), () -> new EnumNumericFieldRule<>(BigInteger.class));
+		fieldRuleMap.put(RuleType.enum_decimal.name(), () -> new EnumNumericFieldRule<>(BigDecimal.class));
+		fieldRuleMap.put(RuleType.date.name(), () -> new DateFieldRule());
+		fieldRuleMap.put(RuleType.datetime.name(), () -> new DatetimeFieldRule());
 	}
 
 	/**
@@ -255,7 +261,7 @@ public enum ValidatorEngine {
 	public static Map<String, Object> loadRuleDictYml(String ymlFilePath) {
 		Yaml yaml = new Yaml();
 
-		Map<String, Object> map = new HashMap<>(2);
+		Map<String, Object> map = new ConcurrentHashMap<>(2);
 
 		List<Map<String, Object>> listMap = new ArrayList<>();
 		Enumeration<URL> ps;
@@ -299,7 +305,6 @@ public enum ValidatorEngine {
 		 * map 会融合bay-validator自身的预制配置和用户定义的 common_dict
 		 */
 		listMap.forEach((itemMap) -> map.putAll(itemMap));
-
 		return map;
 	}
 
@@ -312,7 +317,7 @@ public enum ValidatorEngine {
 	public static Map<String, Map<String, Object>> loadValueRulesYml(String valueRulesYmlFilePath) {
 		Yaml yaml = new Yaml();
 
-		Map<String, Map<String, Object>> map = new HashMap<>(2);
+		Map<String, Map<String, Object>> map = new ConcurrentHashMap<>(2);
 
 		List<Map<String, Map<String, Object>>> listMap = new ArrayList<>();
  		Enumeration<URL> ps;
@@ -425,13 +430,12 @@ public enum ValidatorEngine {
 	private Map<String, Object> getRuleMap(String tableName, String fieldName) {
 		Map<String, Object> fieldsMap = this.valueRulesMap.get(tableName);
 		if(fieldsMap == null) {
-			if(this.commonValueRulesMap != null) {
-				fieldsMap = this.commonValueRulesMap.get(tableName);
-				if(fieldsMap == null) {
-					return null;
-				}
+			if(this.commonValueRulesMap == null) {
+				return null;
 			}
-			else {
+
+			fieldsMap = this.commonValueRulesMap.get(tableName);
+			if(fieldsMap == null) {
 				return null;
 			}
 		}
@@ -451,7 +455,7 @@ public enum ValidatorEngine {
 	private FieldRule buildFieldRule(String fieldKey, Map<String, Object> rulesMap) {
 		String type = (String) rulesMap.get(RuleKey.type.name());
 
-		FieldRule fr = fieldRuleMap.get(type);
+		FieldRule fr = fieldRuleMap.get(type).get();
 		if(fr == null) {
 			return null;
 		}
@@ -508,6 +512,7 @@ public enum ValidatorEngine {
             String jsonStr = mapper.writeValueAsString(fieldRule);
 
             if(!RuleType.string.name().equals(fieldRule.getType())) {
+				//System.out.println("jsonStr:" + jsonStr);
                 /**
                  * 如果不是string类型，则不需要补充正则表达式
                  */
@@ -515,7 +520,9 @@ public enum ValidatorEngine {
             }
 
             String regexKey = fieldRule.getStringRegexKey();
+			//System.out.println("fieldRule.getStringRegexKey():" + regexKey);
             String regexStr = (String) CommonDict.INSTANCE.getRule(regexKey);
+			//System.out.println("regexStr:" + regexStr);
             if(StringUtils.isBlank(regexStr)) {
                 throw new IllegalStateException(String.format("regex is blank, regexKey is %s", regexKey));
             }
@@ -556,7 +563,9 @@ public enum ValidatorEngine {
 	 * @return
 	 */
     public List<Object> getEnumValues(String fieldKey) {
+		//System.out.println("getEnumValues:" + fieldKey);
 		Map<String, Object> ruleJson = this.getFieldValidatorRulesJson(fieldKey);
+		//System.out.println("getEnumValues ruleJson:" + ruleJson);
 		if(ruleJson == null) {
 			return null;
 		}
@@ -667,6 +676,11 @@ public enum ValidatorEngine {
 
 					if((value != null) && !(value instanceof String) && !(value instanceof Number)
 							&& (!(value instanceof Boolean))) {
+						// 如果是日期类型，这里不支持校验范围，直接忽略
+						if( (value instanceof LocalDateTime) || (value instanceof LocalDate) || (value instanceof Date) ) {
+							continue;
+						}
+
 						throw new UnsupportedOperationException(
 								String.format("The type of parameter is not supported, name: %s, value: %s"
 								, name, mapper.writeValueAsString(value)));
@@ -839,7 +853,7 @@ public enum ValidatorEngine {
 					makeAnyStringRule(list, tableName, columnName, displaySize);
 				}
 				else {
-					makeNumericRule(list, tableName, columnName, clazzName, displaySize);
+					makeNumericRule(list, tableName, columnName, clazzName);
 				}
 			}
 		}
@@ -848,7 +862,7 @@ public enum ValidatorEngine {
 	}
 
 	public static Map<String, TableMeta> makeStringTableMetaMap(DataSource dataSource, List<String> tables) throws SQLException {
-		Map<String, TableMeta> tablesWithColumnMetaMapping = new HashMap<>();
+		Map<String, TableMeta> tablesWithColumnMetaMapping = new ConcurrentHashMap<>();
 		//连接不能在循环里面，不然有可能占用很多的链接
 		Connection con = dataSource.getConnection();
 		for(String tableName : tables) {
@@ -883,14 +897,13 @@ public enum ValidatorEngine {
 	 * @param tableName
 	 * @param columnName
 	 * @param clazzName
-	 * @param displaySize
 	 */
 	public static void makeNumericRule(List<FieldRule> list, String tableName,
-									   String columnName, String clazzName, Integer displaySize) {
+									   String columnName, String clazzName) {
 		/**
-		 * 不必要取整型最大值
+		 * 兼容雪花算法，需要使用long
 		 */
-		displaySize = Integer.MAX_VALUE;
+		Long displaySize = Long.MAX_VALUE;
 
 		if(Integer.class.getName().equals(clazzName)
 				|| Long.class.getName().equals(clazzName)

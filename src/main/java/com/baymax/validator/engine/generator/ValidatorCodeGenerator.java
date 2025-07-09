@@ -85,7 +85,7 @@ public class ValidatorCodeGenerator {
                     ValidatorEngine.makeAnyStringRule(list, tableName, columnName, displaySize);
                 }
                 else {
-                    ValidatorEngine.makeNumericRule(list, tableName, columnName, clazzName, displaySize);
+                    ValidatorEngine.makeNumericRule(list, tableName, columnName, clazzName);
                 }
             }
         }
