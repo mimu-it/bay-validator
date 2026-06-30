@@ -1,6 +1,7 @@
 package com.baymax.validator.engine.generator;
 
 import com.baymax.validator.engine.ValidatorEngine;
+import com.baymax.validator.engine.YamlConfigLoader;
 import com.baymax.validator.engine.constant.Const;
 import com.baymax.validator.engine.generator.kit.TableMetaKit;
 import com.baymax.validator.engine.generator.meta.ColumnMeta;
@@ -39,36 +40,23 @@ public class ValidatorCodeGenerator {
 
         String oldValueRulesYmlFilePath = valueRulesYmlDirectory + Const.VALUE_RULES_FILENAME;
         String regexDictYmlFilePath = valueRulesYmlDirectory + Const.COMMON_DICT_FILENAME;
-        ValidatorEngine.INSTANCE.init(dbType, oldValueRulesYmlFilePath, regexDictYmlFilePath, userIgnoreKeys, customUseSnake);
-
+        YamlConfigLoader configLoader = new YamlConfigLoader();
+        Map<String, Map<String, Object>> oldConfig = configLoader.loadValueRulesYml(oldValueRulesYmlFilePath);
 
         List<String> tables = TableMetaKit.getTables(dataSource, databaseName, exceptTables);
         if(tables == null || tables.isEmpty()) {
             return;
         }
 
-        Map<String, TableMeta> tablesWithColumnMetaMapping = ValidatorEngine.makeStringTableMetaMap(dataSource, tables);
+        Map<String, TableMeta> tablesWithColumnMetaMapping = buildTableMetaMap(dataSource, tables);
 
         List<FieldRule> list = new ArrayList<>();
-        Iterator<Map.Entry<String, TableMeta>> it = tablesWithColumnMetaMapping.entrySet().iterator();
-        while(it.hasNext()) {
-            Map.Entry<String, TableMeta> entry = it.next();
+        for (Map.Entry<String, TableMeta> entry : tablesWithColumnMetaMapping.entrySet()) {
             String tableName = entry.getKey();
             TableMeta tableMeta = entry.getValue();
 
-            /**
-             * columnName: is_deleted, clazzName:String
-             * columnName: parent_id, clazzName:Long
-             * columnName: name, clazzName:String
-             * columnName: password, clazzName:String
-             * columnName: name_cn, clazzName:String
-             * columnName: user_number, clazzName:String
-             * columnName: is_admin, clazzName:String
-             * columnName: ticket, clazzName:String
-             * columnName: version, clazzName:Integer
-             */
-            List<ColumnMeta> columnMetaList =  tableMeta.getColumnMetaList();
-            for(ColumnMeta meta : columnMetaList) {
+            List<ColumnMeta> columnMetaList = tableMeta.getColumnMetaList();
+            for (ColumnMeta meta : columnMetaList) {
                 String columnName = meta.getName();
                 String clazzName = meta.getOriginClass();
 
@@ -90,13 +78,19 @@ public class ValidatorCodeGenerator {
             }
         }
 
-        String newValueRulesYmlStr = ValidatorEngine.INSTANCE.generateDefaultYml(oldValueRulesYmlFilePath, list);
-        System.out.println(newValueRulesYmlStr);
-
         Path srcResourcesPath = Paths.get(valueRuleModuleTargetPath, "..", "..", "src", "main", "resources", valueRulesYmlDirectory);
 
-        String[] valueRulesFileNameArr = Const.VALUE_RULES_FILENAME.split("\\.");
-        FileWriter.backupAndWrite(srcResourcesPath.toString(), valueRulesFileNameArr[0], valueRulesFileNameArr[1], newValueRulesYmlStr);
+        // 构建合并的 tableMap（保留旧配置，合并新配置，删除已废弃字段）
+        Map<String, Object> mergedTableMap = ValidatorEngine.INSTANCE.buildMergedTableMap(oldConfig, list);
+
+        // 按表名分文件写入 rules 目录
+        String rulesDirPath = srcResourcesPath + File.separator + Const.VALUE_RULES_DIR;
+        ValidatorEngine.INSTANCE.generatePerTableYmlFiles(mergedTableMap, rulesDirPath);
+
+        // 初始化引擎，生成枚举代码
+        ValidatorEngine.INSTANCE.initFromDir(
+                rulesDirPath, regexDictYmlFilePath, null, regexDictYmlFilePath,
+                userIgnoreKeys, customUseSnake);
 
         String sourceFormat = ValidatorEngine.INSTANCE.generateJavaEnumCode(packageName);
 
@@ -105,6 +99,10 @@ public class ValidatorCodeGenerator {
         Path valueEnumRangePath = Paths.get(srcJavaPath.toString(), packagePath);
 
         FileWriter.write(valueEnumRangePath.toString(), "ValueEnumRange", "java", sourceFormat);
+    }
+
+    private static Map<String, TableMeta> buildTableMetaMap(DataSource dataSource, List<String> tables) throws SQLException {
+        return ValidatorEngine.makeStringTableMetaMap(dataSource, tables);
     }
 
     /**

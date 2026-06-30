@@ -18,6 +18,8 @@ public enum CommonDict {
      */
     INSTANCE;
 
+    private final YamlConfigLoader configLoader = new YamlConfigLoader();
+
     Map<String, Object> dict;
 
     /**
@@ -31,7 +33,7 @@ public enum CommonDict {
         regexDictYmlFilePath = StrUtil.isBlank(regexDictYmlFilePath) ?
                 Const.COMMON_DICT_FILENAME : regexDictYmlFilePath;
 
-        dict = ValidatorEngine.loadRuleDictYml(regexDictYmlFilePath);
+        dict = configLoader.loadRuleDictYml(regexDictYmlFilePath);
         if(dict == null) {
             throw new IllegalStateException("load " + Const.COMMON_DICT_FILENAME + " failed");
         }
@@ -51,8 +53,13 @@ public enum CommonDict {
      * @param dictKey
      * @return
      */
+    @SuppressWarnings("unchecked")
     public List<Object> getList(String dictKey) {
-        return (List<Object>) dict.get(dictKey);
+        Object val = dict.get(dictKey);
+        if(val instanceof List) {
+            return (List<Object>) val;
+        }
+        return null;
     }
 }
 

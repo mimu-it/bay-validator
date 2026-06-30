@@ -30,23 +30,30 @@ public class DecimalFieldRule extends FieldRule {
         this.setDecimalMax(decimalMax);
     }
 
-    /**
-     * 因为js的浮点精度不准确，所以约定传入的浮点数需要以字符串的形式出现
-     */
-    @Override
-    public boolean validate(Object value) {
-        String valueStr = String.valueOf(value);
-        if(!StrUtil.isNumber(valueStr)) {
-            return false;
-        }
+	/**
+	 * 因为js的浮点精度不准确，所以约定传入的浮点数需要以字符串的形式出现
+	 */
+	@Override
+	public boolean validate(Object value) {
+		String valueStr = String.valueOf(value);
+		if(!StrUtil.isNumber(valueStr)) {
+			return false;
+		}
 
-        BigDecimal realVal = new BigDecimal(valueStr);
-        Comparable<BigDecimal> min = super.getDecimalMin();
-        Comparable<BigDecimal> max = super.getDecimalMax();
+		BigDecimal realVal = new BigDecimal(valueStr);
+		BigDecimal min = super.getDecimalMin();
+		BigDecimal max = super.getDecimalMax();
 
-        //返回 负整数、零或正整数，根据此对象是小于、等于还是大于指定对象。
-        return (min.compareTo(realVal) <= 0) && (max.compareTo(realVal) >= 0);
-    }
+		if(min != null && min.compareTo(realVal) > 0) {
+			return false;
+		}
+
+		if(max != null && max.compareTo(realVal) < 0) {
+			return false;
+		}
+
+		return true;
+	}
 
 
 }

@@ -51,7 +51,10 @@ public class EnumNumericFieldRule<T extends Comparable> extends FieldRule {
 
         List<Object> enumValues = null;
         if(enumValuesObj instanceof String) {
-            enumValues = (List<Object>) CommonDict.INSTANCE.getRule((String) enumValuesObj);
+            Object ruleVal = CommonDict.INSTANCE.getRule((String) enumValuesObj);
+            if(ruleVal instanceof List) {
+                enumValues = (List<Object>) ruleVal;
+            }
         }
         else if(enumValuesObj instanceof List) {
             enumValues = (List<Object>) enumValuesObj;

@@ -3,7 +3,7 @@ package com.baymax.generator.output.values;
 import java.io.Serializable;
 import java.lang.String;
 
-/** @author xiao.hu create time:2025-07-09 12:58:55 */
+/** @author xiao.hu create time:2026-06-30 21:47:12 */
 public final class ValueEnumRange implements Serializable {
 
   public static final class student {

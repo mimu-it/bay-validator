@@ -13,6 +13,8 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import javax.sql.DataSource;
 
@@ -24,7 +26,9 @@ import javax.sql.DataSource;
  */
 public class TableMetaKit {
 
-	/**
+    private static final Logger LOG = Logger.getLogger(TableMetaKit.class.getName());
+
+    /**
 	 * 获取指定数据库的所有表名
 	 * @return
 	 * @throws SQLException
@@ -32,26 +36,30 @@ public class TableMetaKit {
 	public static List<String> getTables(DataSource dataSource, String databaseName, List<String> exceptTables) {
 		try {
 			Connection conn = dataSource.getConnection();
-			DatabaseMetaData dbMetData = conn.getMetaData();
-			// mysql convertDatabaseCharsetType null
-			ResultSet rs = dbMetData.getTables(databaseName, null, null, new String[] { "TABLE", "VIEW" });
-			
-			List<String> tables = new ArrayList<>();
-			while (rs.next()) {
-				String tableType = rs.getString(4);
-				if(tableType == null) {
-					continue;
-				}
+			try {
+				DatabaseMetaData dbMetData = conn.getMetaData();
+				// mysql convertDatabaseCharsetType null
+				ResultSet rs = dbMetData.getTables(databaseName, null, null, new String[] { "TABLE", "VIEW" });
 
-				if (tableType.equalsIgnoreCase("TABLE") || tableType.equalsIgnoreCase("VIEW")) {
-					String tableName = rs.getString(3).toLowerCase();
-					if(exceptTables == null || !exceptTables.contains(tableName)) {
-						System.out.print(tableName + "\t");
-						tables.add(tableName);
+				List<String> tables = new ArrayList<>();
+				while (rs.next()) {
+					String tableType = rs.getString(4);
+					if(tableType == null) {
+						continue;
+					}
+
+					if (tableType.equalsIgnoreCase("TABLE") || tableType.equalsIgnoreCase("VIEW")) {
+						String tableName = rs.getString(3).toLowerCase();
+						if(exceptTables == null || !exceptTables.contains(tableName)) {
+							System.out.print(tableName + "\t");
+							tables.add(tableName);
+						}
 					}
 				}
+				return tables;
+			} finally {
+				try { conn.close(); } catch (SQLException ignored) {}
 			}
-			return tables;
 		} catch (SQLException e) {
 			throw new IllegalStateException(e);
 		}
@@ -147,7 +155,7 @@ public class TableMetaKit {
                 list.add(oColumnMeta);
             }
 		} catch (SQLException e) {
-			e.printStackTrace();
+            LOG.log(Level.WARNING, "Failed to get columns meta for table: " + tableName, e);
 			list = null;
 		}
 		

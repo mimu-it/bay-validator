@@ -9,6 +9,7 @@ public class Const {
 
     public static final String COMMON_DICT_FILENAME = "common_dict.yml";
     public static final String VALUE_RULES_FILENAME = "value_rules.yml";
+    public static final String VALUE_RULES_DIR = "rules";
     public static final String ENUM_FIELD_RULE_FILENAME = "EnumFieldRule.enjoy";
     public static final String ENUM_VALUES_TEMPLATE_FILENAME = "EnumValues.enjoy";
     public static final String TABLE_FILENAME = "Table.enjoy";
@@ -35,6 +36,7 @@ public class Const {
 
     public enum FileType {
         java,
-        js
+        js,
+        yml
     }
 }

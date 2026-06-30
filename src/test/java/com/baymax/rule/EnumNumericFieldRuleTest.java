@@ -8,14 +8,14 @@ import org.junit.Test;
 
 import java.util.HashSet;
 
-public class EnumStringFieldRuleTest {
+public class EnumNumericFieldRuleTest {
 
     @Before
     public void init() {
         HxValidator.Engine.create()
                 .dbType(DataBaseType.mysql)
                 .commonRules("value_rules_common.yml")
-                .rules("rule/enum_string_field_rule.yml")
+                .rules("rule/enum_numeric_field_rule.yml")
                 .ruleDict("common_dict.yml")
                 .ignoreKeys(new HashSet<String>() {{
                     add("id"); add("version"); add("is_deleted");
@@ -30,43 +30,58 @@ public class EnumStringFieldRuleTest {
 
     @Test
     public void firstValue() {
-        HxValidator.builder().validate("student.gender", "male");
+        HxValidator.builder().validate("student.game_card", 1);
     }
 
     @Test
     public void secondValue() {
-        HxValidator.builder().validate("student.gender", "female");
+        HxValidator.builder().validate("student.game_card", 2);
+    }
+
+    @Test
+    public void thirdValue() {
+        HxValidator.builder().validate("student.game_card", 100);
+    }
+
+    @Test
+    public void stringNumber() {
+        HxValidator.builder().validate("student.game_card", "1");
     }
 
     // ================== 非法值 ==================
 
     @Test(expected = Exception.class)
     public void notInEnum() {
-        HxValidator.builder().validate("student.gender", "other");
+        HxValidator.builder().validate("student.game_card", 3);
     }
 
     @Test(expected = Exception.class)
-    public void caseSensitive() {
-        HxValidator.builder().validate("student.gender", "MALE");
+    public void negativeValue() {
+        HxValidator.builder().validate("student.game_card", -1);
+    }
+
+    @Test(expected = Exception.class)
+    public void zeroNotInEnum() {
+        HxValidator.builder().validate("student.game_card", 0);
+    }
+
+    @Test(expected = Exception.class)
+    public void decimalValue() {
+        HxValidator.builder().validate("student.game_card", 1.5);
     }
 
     @Test(expected = Exception.class)
     public void emptyString() {
-        HxValidator.builder().validate("student.gender", "");
+        HxValidator.builder().validate("student.game_card", "");
     }
 
     @Test(expected = Exception.class)
     public void nullValue() {
-        HxValidator.builder().validate("student.gender", (Object) null);
+        HxValidator.builder().validate("student.game_card", (Object) null);
     }
 
     @Test(expected = Exception.class)
-    public void numericString() {
-        HxValidator.builder().validate("student.gender", "123");
-    }
-
-    @Test(expected = Exception.class)
-    public void partialMatch() {
-        HxValidator.builder().validate("student.gender", "male_extra");
+    public void nonNumericString() {
+        HxValidator.builder().validate("student.game_card", "abc");
     }
 }

@@ -15,8 +15,8 @@ import java.util.Map;
  */
 public class ParamUtil {
 
-    private static SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
-    private static SimpleDateFormat datetimeFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+    private static final ThreadLocal<SimpleDateFormat> dateFormatLocal = ThreadLocal.withInitial(() -> new SimpleDateFormat("yyyy-MM-dd"));
+    private static final ThreadLocal<SimpleDateFormat> datetimeFormatLocal = ThreadLocal.withInitial(() -> new SimpleDateFormat("yyyy-MM-dd HH:mm:ss"));
 
     /**
      * 从yml文件中获取参数配置值，转换成BigInteger
@@ -62,7 +62,7 @@ public class ParamUtil {
      * @return
      */
     public static Date getDate(Map<String, Object> rulesMap, String key) {
-        return getDate(rulesMap, key, dateFormat);
+        return getDate(rulesMap, key, dateFormatLocal.get());
     }
 
     /**
@@ -72,7 +72,7 @@ public class ParamUtil {
      * @return
      */
     public static Date getDatetime(Map<String, Object> rulesMap, String key) {
-        return getDate(rulesMap, key, datetimeFormat);
+        return getDate(rulesMap, key, datetimeFormatLocal.get());
     }
 
     /**

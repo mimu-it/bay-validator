@@ -1,0 +1,7 @@
+student:
+  game_card:
+    type: enum_numeric
+    enum_values:
+      - 1
+      - 2
+      - 100

@@ -34,26 +34,33 @@ public class NumericFieldRule extends FieldRule {
         this.setNumericMax(numericMax);
     }
 
-    @Override
-    public boolean validate(Object value) {
-        String valueStr = String.valueOf(value);
-        if(!StrUtil.isNumber(valueStr)) {
-            return false;
-        }
+	@Override
+	public boolean validate(Object value) {
+		String valueStr = String.valueOf(value);
+		if(!StrUtil.isNumber(valueStr)) {
+			return false;
+		}
 
-        BigInteger realVal;
-        try {
-            realVal = new BigInteger(valueStr);
-        } catch (Exception e) {
-            return false;
-        }
+		BigInteger realVal;
+		try {
+			realVal = new BigInteger(valueStr);
+		} catch (Exception e) {
+			return false;
+		}
 
-        Comparable<BigInteger> min = super.getNumericMin();
-        Comparable<BigInteger> max = super.getNumericMax();
+		BigInteger min = super.getNumericMin();
+		BigInteger max = super.getNumericMax();
 
-        //返回 负整数、零或正整数，根据此对象是小于、等于还是大于指定对象。
-        return (min.compareTo(realVal) <= 0) && (max.compareTo(realVal) >= 0);
-    }
+		if(min != null && min.compareTo(realVal) > 0) {
+			return false;
+		}
+
+		if(max != null && max.compareTo(realVal) < 0) {
+			return false;
+		}
+
+		return true;
+	}
 
 
 }

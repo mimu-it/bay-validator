@@ -11,3 +11,8 @@ student:
     string_regex_key: only_chinese_and_english_and_underline
     string_length_min: 3
     string_length_max: 12
+  description:
+    type: string
+    string_regex_key: any_string
+    string_length_min: 5
+    string_length_max: 20

@@ -1,7 +1,9 @@
 package com.baymax.validator.engine.model.sub;
 
 import com.baymax.validator.engine.CommonDict;
+import com.baymax.validator.engine.ValidatorEngine;
 import com.baymax.validator.engine.model.FieldRule;
+import com.baymax.validator.engine.preset.DbType;
 import com.baymax.validator.engine.preset.RuleKey;
 import com.baymax.validator.engine.utils.StrUtil;
 import org.apache.commons.lang3.StringUtils;
@@ -20,9 +22,6 @@ public class StringRegexFieldRule extends FieldRule {
 
     @Override
     public void build(String fieldKey, String type, Map<String, Object> rulesMap) {
-        /**
-         * string的相关配置
-         */
         String stringCharset = (String) rulesMap.get(RuleKey.string_charset.name());
         String stringRegexKey = (String) rulesMap.get(RuleKey.string_regex_key.name());
         Integer stringLengthMin = (Integer) rulesMap.get(RuleKey.string_length_min.name());
@@ -36,29 +35,29 @@ public class StringRegexFieldRule extends FieldRule {
         this.setStringLengthMax(stringLengthMax);
     }
 
-    @Override
-    public boolean validate(Object value) {
-        String realVal = String.valueOf(value);
-        /**
-         * 验证字符串长度是否符合规范
-         * 如果没有配置，则默认符合长度规范
-         */
-        String charset = super.getStringCharset();
-        Integer stringLengthMin = super.getStringLengthMin();
-        Integer stringLengthMax = super.getStringLengthMax();
-        if(StringUtils.isNotBlank(charset) && stringLengthMin != null && stringLengthMax != null) {
-            if(StrUtil.isBlank(charset)) {
+	@Override
+	public boolean validate(Object value) {
+		String realVal = String.valueOf(value);
+		/**
+		 * 验证字符串长度是否符合规范
+		 * 如果没有配置，则默认符合长度规范
+		 */
+		String charset = super.getStringCharset();
+		Integer stringLengthMin = super.getStringLengthMin();
+		Integer stringLengthMax = super.getStringLengthMax();
+		if(stringLengthMin != null && stringLengthMax != null) {
+			if(StrUtil.isBlank(charset)) {
+				/**
+				 * charset 为空：使用字符数（mysql 默认方式）
+				 */
+				int length = realVal.length();
+				if(length > stringLengthMax || length < stringLengthMin) {
+					return false;
+				}
+			}
+			else {
                 /**
-                 * charset 为空意味着是使用mysql的字段长度规则
-                 */
-                int length = realVal.length();
-                if(length > stringLengthMax || length < stringLengthMin) {
-                    return false;
-                }
-            }
-            else {
-                /**
-                 * charset 不为空意味着是需要使用byte验证字段长度规则
+                 * charset 不为空：使用字节数（oracle 或显式指定编码）
                  */
                 try {
                     int length = realVal.getBytes(charset).length;

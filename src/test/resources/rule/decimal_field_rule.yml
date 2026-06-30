@@ -1,0 +1,5 @@
+student:
+  money:
+    type: decimal
+    decimal_min: 0.00
+    decimal_max: 300.00

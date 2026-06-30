@@ -206,7 +206,8 @@ public class ValidatorEngineTest {
                         "\"stringRegexKey\":\"phone_number\"," +
                         "\"stringLengthMin\":11," +
                         "\"stringLengthMax\":11," +
-                        "\"regexStr\":\"^1[3|4|5|7|8][0-9]{9}$\"}", jsonStr2);
+                        "\"regexStr\":\"^1[3|4|5|7|8][0-9]{9}$\"," +
+                        "\"lengthMode\":\"byte\"}", jsonStr2);
     }
 
 

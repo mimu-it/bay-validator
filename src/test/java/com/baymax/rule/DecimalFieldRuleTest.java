@@ -7,16 +7,17 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.math.BigDecimal;
 import java.util.HashSet;
 
-public class NumericFieldRuleTest {
+public class DecimalFieldRuleTest {
 
     @Before
     public void init() {
         HxValidator.Engine.create()
                 .dbType(DataBaseType.mysql)
                 .commonRules("value_rules_common.yml")
-                .rules("rule/numeric_field_rule.yml")
+                .rules("rule/decimal_field_rule.yml")
                 .ruleDict("common_dict.yml")
                 .ignoreKeys(new HashSet<String>() {{
                     add("id"); add("version"); add("is_deleted");
@@ -31,60 +32,63 @@ public class NumericFieldRuleTest {
 
     @Test
     public void minBoundary() {
-        HxValidator.builder().validate("student.age", 0);
+        HxValidator.builder().validate("student.money", "0.00");
     }
 
     @Test
     public void maxBoundary() {
-        HxValidator.builder().validate("student.age", 120);
-    }
-
-    @Test
-    public void stringNumber() {
-        HxValidator.builder().validate("student.age", "60");
+        HxValidator.builder().validate("student.money", "300.00");
     }
 
     @Test
     public void insideRange() {
-        HxValidator.builder().validate("student.age", 1);
-        HxValidator.builder().validate("student.age", 119);
-        HxValidator.builder().validate("student.age", "50");
+        HxValidator.builder().validate("student.money", "200.00");
+    }
+
+    @Test
+    public void zeroOnly() {
+        HxValidator.builder().validate("student.money", "0");
+    }
+
+    @Test
+    public void bigDecimalObject() {
+        HxValidator.builder().validate("student.money", new BigDecimal("150.50"));
+    }
+
+    @Test
+    public void integerString() {
+        HxValidator.builder().validate("student.money", "100");
     }
 
     // ================== 非法值 ==================
 
     @Test(expected = Exception.class)
     public void belowMin() {
-        HxValidator.builder().validate("student.age", -1);
+        HxValidator.builder().validate("student.money", "-0.01");
     }
 
     @Test(expected = Exception.class)
     public void aboveMax() {
-        HxValidator.builder().validate("student.age", 121);
+        HxValidator.builder().validate("student.money", "300.01");
     }
 
     @Test(expected = Exception.class)
-    public void negativeBig() {
-        HxValidator.builder().validate("student.age", -999999);
+    public void negativeValue() {
+        HxValidator.builder().validate("student.money", "-100.00");
     }
 
     @Test(expected = Exception.class)
     public void nonNumericString() {
-        HxValidator.builder().validate("student.age", "abc");
+        HxValidator.builder().validate("student.money", "abc");
     }
 
     @Test(expected = Exception.class)
     public void emptyString() {
-        HxValidator.builder().validate("student.age", "");
+        HxValidator.builder().validate("student.money", "");
     }
 
     @Test(expected = Exception.class)
     public void nullValue() {
-        HxValidator.builder().validate("student.age", (Object) null);
-    }
-
-    @Test(expected = Exception.class)
-    public void decimalValue() {
-        HxValidator.builder().validate("student.age", 1.5);
+        HxValidator.builder().validate("student.money", (Object) null);
     }
 }

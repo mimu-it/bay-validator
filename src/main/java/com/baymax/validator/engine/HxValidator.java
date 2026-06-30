@@ -34,6 +34,7 @@ public class HxValidator {
         private Set<String> userIgnoreKeys;
         private KeyMode keyMode = KeyMode.camel;
         private IFormatter formatter = null;
+        private boolean useRulesDir = false;
 
         public static Engine create() {
             return new Engine();
@@ -46,6 +47,12 @@ public class HxValidator {
 
         public Engine rules(String valueRulesYmlFilePath) {
             this.valueRulesYmlFilePath = valueRulesYmlFilePath;
+            return this;
+        }
+
+        public Engine rulesDir(String valueRulesDir) {
+            this.valueRulesYmlFilePath = valueRulesDir;
+            this.useRulesDir = true;
             return this;
         }
 
@@ -79,12 +86,16 @@ public class HxValidator {
                 throw new IllegalArgumentException("Value rules file path is blank");
             }
 
-            ValidatorEngine.INSTANCE.init(this.dbType.name(),
-                    this.valueRulesYmlFilePath,
-                    this.commonValueRulesYmlFilePath,
-                    this.ruleDictYmlFilePath,
-                    this.userIgnoreKeys,
-                    this.keyMode == KeyMode.snake);
+            if(useRulesDir) {
+                ValidatorEngine.INSTANCE.initFromDir(this.valueRulesYmlFilePath, this.ruleDictYmlFilePath);
+            } else {
+                ValidatorEngine.INSTANCE.init(this.dbType.name(),
+                        this.valueRulesYmlFilePath,
+                        this.commonValueRulesYmlFilePath,
+                        this.ruleDictYmlFilePath,
+                        this.userIgnoreKeys,
+                        this.keyMode == KeyMode.snake);
+            }
 
             if(this.formatter != null){
                 ValidatorEngine.INSTANCE.setFormatter(this.formatter);

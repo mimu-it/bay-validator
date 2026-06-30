@@ -62,7 +62,7 @@ public class JavaEnumTemplateRender {
      */
     private static String buildEnumValuesStr(List<Object> enumValues, String prefix, String javaType,
                                              Map<Object, String> dict) {
-        StringBuffer sb = new StringBuffer();
+        StringBuilder sb = new StringBuilder();
         for (Object val : enumValues) {
             String valStr = String.valueOf(val);
 

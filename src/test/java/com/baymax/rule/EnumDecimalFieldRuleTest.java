@@ -3,22 +3,13 @@ package com.baymax.rule;
 import com.baymax.validator.engine.DataBaseType;
 import com.baymax.validator.engine.HxValidator;
 import com.baymax.validator.engine.KeyMode;
-import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.util.HashSet;
 
-/**
- * @author xiao.hu
- * @date 2024-02-20
- * @apiNote
- */
 public class EnumDecimalFieldRuleTest {
 
-    /**
-     * 初始化
-     */
     @Before
     public void init() {
         HxValidator.Engine.create()
@@ -27,60 +18,50 @@ public class EnumDecimalFieldRuleTest {
                 .rules("rule/enum_decimal_field_rule.yml")
                 .ruleDict("common_dict.yml")
                 .ignoreKeys(new HashSet<String>() {{
-                    add("id");
-                    add("version");
-                    add("is_deleted");
-                    add("modifier");
-                    add("creator");
-                    add("created_at");
-                    add("updated_at");
+                    add("id"); add("version"); add("is_deleted");
+                    add("modifier"); add("creator");
+                    add("created_at"); add("updated_at");
                 }})
                 .keyMode(KeyMode.snake)
                 .init();
     }
 
-    /**
-     * 正常流程逻辑
-     */
-    @Test
-    public void testLegal_0() {
-        try {
-            HxValidator.builder().validate("student.float_card", "3.11");
-        } catch (Exception e) {
-            Assert.assertTrue(false);
-            return;
-        }
+    // ================== 合法值 ==================
 
-        Assert.assertTrue(true);
+    @Test
+    public void firstValue() {
+        HxValidator.builder().validate("student.float_card", "3.11");
     }
 
-    /**
-     * 正常流程逻辑
-     */
     @Test
-    public void testLegal_1() {
-        try {
-            HxValidator.builder().validate("student.float_card", "4000000000.123456");
-        } catch (Exception e) {
-            Assert.assertTrue(false);
-            return;
-        }
-
-        Assert.assertTrue(true);
+    public void secondValue() {
+        HxValidator.builder().validate("student.float_card", "4000000000.123456");
     }
 
-    /**
-     * 异常流程逻辑
-     */
-    @Test
-    public void testIllegal_1() {
-        try {
-            HxValidator.builder().validate("student.float_card", "123.0");
-        } catch (Exception e) {
-            Assert.assertTrue(true);
-            return;
-        }
+    // ================== 非法值 ==================
 
-        Assert.assertTrue(false);
+    @Test(expected = Exception.class)
+    public void notInEnum() {
+        HxValidator.builder().validate("student.float_card", "123.0");
+    }
+
+    @Test(expected = Exception.class)
+    public void nearMatch() {
+        HxValidator.builder().validate("student.float_card", "3.12");
+    }
+
+    @Test(expected = Exception.class)
+    public void emptyString() {
+        HxValidator.builder().validate("student.float_card", "");
+    }
+
+    @Test(expected = Exception.class)
+    public void nonNumericString() {
+        HxValidator.builder().validate("student.float_card", "abc");
+    }
+
+    @Test(expected = Exception.class)
+    public void nullValue() {
+        HxValidator.builder().validate("student.float_card", (Object) null);
     }
 }

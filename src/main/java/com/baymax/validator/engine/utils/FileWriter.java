@@ -23,8 +23,7 @@ public class FileWriter {
             try {
                 new File(path).mkdirs();
             } catch (Exception e) {
-                e.printStackTrace();
-                throw new IllegalStateException(e);
+                throw new IllegalStateException("Failed to create directory: " + path, e);
             }
         }
     }
@@ -35,8 +34,7 @@ public class FileWriter {
             try {
                 new File(fileUri).createNewFile();
             } catch (IOException e) {
-                e.printStackTrace();
-                throw new IllegalStateException(e);
+                throw new IllegalStateException("Failed to create file: " + fileUri, e);
             }
         }
     }

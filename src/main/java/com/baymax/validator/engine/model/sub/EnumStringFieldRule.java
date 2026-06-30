@@ -36,7 +36,10 @@ public class EnumStringFieldRule extends FieldRule {
 
         List<String> enumValues = null;
         if(enumValuesObj instanceof String) {
-            enumValues = (List<String>) CommonDict.INSTANCE.getRule((String) enumValuesObj);
+            Object ruleVal = CommonDict.INSTANCE.getRule((String) enumValuesObj);
+            if(ruleVal instanceof List) {
+                enumValues = (List<String>) ruleVal;
+            }
         }
         else if(enumValuesObj instanceof List) {
             enumValues = (List<String>) enumValuesObj;

@@ -17,11 +17,12 @@ import java.util.TimeZone;
  * @apiNote
  */
 public class DatetimeFieldRule extends FieldRule {
-    private static SimpleDateFormat datetimeFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-    static {
+    private static final ThreadLocal<SimpleDateFormat> datetimeFormatLocal = ThreadLocal.withInitial(() -> {
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
         /** yaml.loadAs 默认会把日期字符串转换为Date  会变成 08:00:00 */
-        datetimeFormat.setTimeZone(TimeZone.getDefault());
-    }
+        sdf.setTimeZone(TimeZone.getDefault());
+        return sdf;
+    });
 
     @Override
     public void build(String fieldKey, String type, Map<String, Object> rulesMap) {
@@ -47,7 +48,7 @@ public class DatetimeFieldRule extends FieldRule {
             }
 
             try {
-                date = datetimeFormat.parse(valueStr);
+                date = datetimeFormatLocal.get().parse(valueStr);
             } catch (Exception e) {
                 return false;
             }

@@ -1,10 +1,8 @@
 package com.baymax.validator.engine;
 
-import com.baymax.App;
 import com.baymax.validator.engine.common.Common;
 import com.baymax.validator.engine.constant.Const;
-import com.baymax.validator.engine.generator.JavaEnum;
-import com.baymax.validator.engine.generator.JavaEnumTemplateRender;
+import com.baymax.validator.engine.generator.EnumCodeGenerator;
 import com.baymax.validator.engine.generator.formatter.IFormatter;
 import com.baymax.validator.engine.generator.kit.TableMetaKit;
 import com.baymax.validator.engine.generator.meta.ColumnMeta;
@@ -20,10 +18,7 @@ import com.baymax.validator.engine.utils.NameUtil;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.jfinal.kit.Kv;
-import com.jfinal.template.Engine;
 import org.apache.commons.lang3.StringUtils;
-import org.apache.commons.lang3.time.DateFormatUtils;
 import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.nodes.Tag;
@@ -34,11 +29,9 @@ import java.beans.Introspector;
 import java.beans.PropertyDescriptor;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.sql.Connection;
@@ -48,32 +41,116 @@ import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
+ * 校验引擎核心（单例枚举）。
+ *
+ * <p><b>核心职责：</b>
+ * <ol>
+ *   <li>加载并持有校验规则配置（{@code valueRulesMap / commonValueRulesMap}）</li>
+ *   <li>提供单字段校验、Java Bean 校验入口</li>
+ *   <li>提供 FieldRule 查询与 JSON 序列化输出</li>
+ *   <li>提供 YML 配置合并/生成和 Java 枚举代码生成辅助接口</li>
+ * </ol>
+ *
+ * <p><b>YAML 配置结构（value_rules.yml）：</b>
+ * <pre>{@code
+ * student:                          # ← 表名（tableName）
+ *   id:                             # ← 字段名（fieldName）
+ *     type: numeric                 # 校验类型
+ *     numeric_min: 1                # 数值最小值
+ *     numeric_max: 128              # 数值最大值
+ *   gender:
+ *     type: enum_string             # 字符串枚举
+ *     enum_values:
+ *       - male
+ *       - female
+ *   phone_number:
+ *     type: string                  # 字符串 + 正则
+ *     string_regex_key: phone_number
+ *     string_length_min: 11
+ *     string_length_max: 11
+ *     string_charset: utf8
+ *   money:
+ *     type: decimal                 # 浮点小数
+ *     decimal_min: 0.00
+ *     decimal_max: 300.00
+ *   birthday:
+ *     type: date                    # 日期
+ *     begin_at: 2020-01-01
+ *     end_at: 2030-12-31
+ *   created_at:
+ *     type: datetime                # 日期时间
+ *     begin_at: 2020-01-01 00:00:00
+ *     end_at: 2030-12-31 23:59:59
+ *   game_card:
+ *     type: enum_numeric            # 数字枚举
+ *     enum_values:
+ *       - 1
+ *       - 2
+ * }</pre>
+ *
+ * <p><b>字段 Key 格式：</b> {@code tableName.fieldName}，例如 {@code "student.id"}。
+ * 如果不包含 {@code .}，会自动补全为 {@code _common.xxx}。
+ *
+ * <p>YAML 加载 → {@link YamlConfigLoader} <br>
+ * 枚举代码生成 → {@link EnumCodeGenerator}
+ *
  * @author xiao.hu
- * mysql varchar(50) 不管中文 还是英文 都是存50个的 不管 tinyint
- *         后面的数字是多少，它存储长度=2^（1字节）=2^8，即存储范围是 -2^7 到 2^7 - 1。==> 127
- * 
- *         JS的数据类型只有字符串值，数值，布尔值，数组，对象，
- *         对于参数而言，我们只取字符串值和数值，因为boolean类型也可以用true和false表示
  */
 public enum ValidatorEngine {
 	/**
-	 * 单例
+	 * 单例实例
 	 */
 	INSTANCE;
 
+    private static final Logger LOG = Logger.getLogger(ValidatorEngine.class.getName());
+
+    private final YamlConfigLoader configLoader = new YamlConfigLoader();
+	private EnumCodeGenerator enumCodeGenerator;
+
 	private static ObjectMapper mapper = new ObjectMapper();
 
-
 	/**
-	 * Map的形式保存了value_rules.yml的配置
+	 * 校验规则配置缓存。<br>
+	 * 结构：{@code Map<tableName, Map<fieldName, Map<ruleKey, ruleValue>>>}
+	 * <pre>
+	 * {
+	 *   "student": {
+	 *     "id":            { "type": "numeric",      "numeric_min": 1, "numeric_max": 128 },
+	 *     "gender":        { "type": "enum_string",  "enum_values": ["male", "female"] },
+	 *     "phone_number":  { "type": "string",       "string_regex_key": "phone_number", "string_length_min": 11, "string_length_max": 11 },
+	 *     "money":         { "type": "decimal",      "decimal_min": 0.00, "decimal_max": 300.00 },
+	 *     "birthday":      { "type": "date",         "begin_at": 2020-01-01, "end_at": 2030-12-31 },
+	 *     "game_card":     { "type": "enum_numeric", "enum_values": [1, 2] }
+	 *   },
+	 *   "order": { ... }
+	 * }
+	 * </pre>
 	 */
 	Map<String, Map<String, Object>> valueRulesMap;
+
+	/**
+	 * 通用校验规则配置缓存（跨模块共享的公共规则）。
+	 * 当 {@link #valueRulesMap} 中查不到指定表名时，会回退到此 Map 查找。
+	 */
 	Map<String, Map<String, Object>> commonValueRulesMap;
 
 	/**
-	 * 在 Java 中实现一个 Map 保存类的构造函数，并通过 get 方法每次返回新的实例，可以通过 工厂模式 结合 方法引用 或 Supplier 来实现
+	 * FieldRule 工厂映射。<br>
+	 * 根据 {@link RuleType} 创建对应的 {@link FieldRule} 子类实例。
+	 * <pre>
+	 * "numeric"       → NumericFieldRule
+	 * "decimal"       → DecimalFieldRule
+	 * "string"        → StringRegexFieldRule
+	 * "enum_string"   → EnumStringFieldRule
+	 * "enum_numeric"  → EnumNumericFieldRule&lt;BigInteger&gt;
+	 * "enum_decimal"  → EnumNumericFieldRule&lt;BigDecimal&gt;
+	 * "date"          → DateFieldRule
+	 * "datetime"      → DatetimeFieldRule
+	 * </pre>
 	 */
 	private static Map<String, Supplier<FieldRule>> fieldRuleMap = new HashMap<>();
 	static {
@@ -88,31 +165,28 @@ public enum ValidatorEngine {
 	}
 
 	/**
-	 * 决定键校验时使用驼峰还是下划线模式
-	 * @param isSnakeKeyMode
+	 * 键模式：{@code true}=下划线模式（snake_case），{@code false}=驼峰模式（camelCase）。<br>
+	 * 默认 {@code true}。
+	 * <pre>
+	 * true  → "phoneNumber" 转为 "phone_number" 再与规则匹配
+	 * false → "phone_number" 直接与规则匹配
+	 * </pre>
 	 */
 	private boolean isSnakeKeyMode = true;
 
 	/**
-	 * 默认数据库类型是mysql
+	 * 当前数据库类型，影响字段长度换算规则等。
 	 */
 	private static DbType dbType = null;
 
-	public static DbType getDbType() {
-		return dbType;
-	}
-
-	public static void initDbType(String dbTypeName) {
-		if(DbType.oracle.name().equals(dbTypeName)) {
-			dbType = DbType.oracle;
-		}
-		else {
-			dbType = DbType.mysql;
-		}
-	}
-
 	/**
-	 * 可被自定义
+	 * 全局忽略字段集合。校验 Java Bean 时自动跳过这些字段。<br>
+	 * <b>默认值：</b>
+	 * <pre>{@code
+	 * {"id", "gmt_created", "creator", "gmt_modified",
+	 *  "modifier", "is_deleted", "version"}
+	 * }</pre>
+	 * 可通过 {@link #init(String, String, String, String, Set, boolean)} 自定义。
 	 */
 	private static Set<String> ignoreKeys = new HashSet<>();
 	static {
@@ -125,84 +199,166 @@ public enum ValidatorEngine {
 		ignoreKeys.add("version");
 	}
 
+	/**
+	 * 代码格式化插件，可选。用于生成 Java 枚举代码时格式化输出。
+	 */
+	private IFormatter formatter = null;
+
+	// ===================== Getters / Setters =====================
+
+	/**
+	 * 获取当前数据库类型。
+	 * @return 当前 {@link DbType}，可能为 {@code null}（未初始化时）
+	 * <pre>{@code
+	 * DbType type = ValidatorEngine.getDbType(); // mysql 或 oracle
+	 * }</pre>
+	 */
+	public static DbType getDbType() {
+		return dbType;
+	}
+
+	/**
+	 * 获取当前加载的校验规则配置（只读场景使用）。
+	 * @return valueRulesMap，结构见 {@link #valueRulesMap} 字段说明
+	 * <pre>{@code
+	 * Map<String, Map<String, Object>> rules = ValidatorEngine.INSTANCE.getValueRulesMap();
+	 * Map<String, Object> studentFields = rules.get("student");
+	 * }</pre>
+	 */
+	public Map<String, Map<String, Object>> getValueRulesMap() {
+		return valueRulesMap;
+	}
+
+	/**
+	 * 判断指定 key 是否在全局忽略字段集合中。
+	 * @param key 字段名（已转换为对应命名模式后的值）
+	 * @return 如果该字段应被忽略则返回 {@code true}
+	 * <pre>{@code
+	 * ValidatorEngine.containIgnoreKeys("id");           // true
+	 * ValidatorEngine.containIgnoreKeys("is_deleted");   // true
+	 * ValidatorEngine.containIgnoreKeys("name");         // false
+	 * }</pre>
+	 */
 	public static boolean containIgnoreKeys(String key) {
 		return ignoreKeys.contains(key);
 	}
 
 	/**
-	 * 代码格式化插件
+	 * 设置代码格式化器。仅在生成 Java 枚举代码时使用。
+	 * @param formatter 实现了 {@link IFormatter} 的格式化器实例
+	 * <pre>{@code
+	 * ValidatorEngine.INSTANCE.setFormatter(new IFormatter() {
+	 *     public String formatJava(String s) {
+	 *         return new Formatter().formatSource(s);
+	 *     }
+	 * });
+	 * }</pre>
 	 */
-	private IFormatter formatter = null;
-
 	public void setFormatter(IFormatter formatter) {
 		this.formatter = formatter;
 	}
 
+	// ===================== DbType =====================
+
 	/**
-	 * {{ 入口方法 }}
-	 *
-	 *
-	 * 根据给予的value_rules.yml类进行初始化
-	 * 配置样例如下：
-	 * student:
-	 *   id:
-	 *     type: int
-	 *     numeric_min: 1
-	 *     numeric_max: 128
-	 *     string_charset: utf8
-	 *     string_regex: positive_integer
-	 *     string_length_min: 0
-	 *     string_length_max: 128
-	 *     enum_values: null
-	 *   gender:
-	 *     type: enum
-	 *     numeric_min: null
-	 *     numeric_max: null
-	 *     string_charset: null
-	 *     string_regex: null
-	 *     string_length_min: null
-	 *     string_length_max: null
-	 *     enum_values:
-	 *     - male
-	 *     - female
-	 *
-	 *   结构为 map -> map -> {String, Integer, ArrayList}
+	 * 根据名称初始化数据库类型。
+	 * @param dbTypeName 数据库类型名称（{@code "mysql"} 或 {@code "oracle"}），不区分大小写。
+	 *                    传入 {@code "oracle"} 以外的值均视为 {@code "mysql"}。
+	 * <pre>{@code
+	 * ValidatorEngine.initDbType("mysql");   // dbType = DbType.mysql
+	 * ValidatorEngine.initDbType("oracle");  // dbType = DbType.oracle
+	 * ValidatorEngine.initDbType("mariadb"); // dbType = DbType.mysql（兼容）
+	 * }</pre>
+	 */
+	public static void initDbType(String dbTypeName) {
+		if(DbType.oracle.name().equals(dbTypeName)) {
+			dbType = DbType.oracle;
+		}
+		else {
+			dbType = DbType.mysql;
+		}
+	}
+
+	// ===================== 初始化 =====================
+
+	/**
+	 * 基础初始化（仅供内部 init 重载调用）。
+	 * @param dbType               数据库类型名称
+	 * @param valueRulesYmlFilePath value_rules.yml 的 classpath 路径
+	 * @param regexDictYmlFilePath  common_dict.yml 的 classpath 路径（为空则使用默认值 {@code common_dict.yml}）
+	 * <pre>{@code
+	 * ValidatorEngine.INSTANCE.init0("mysql", "value_rules.yml", "common_dict.yml");
+	 * }</pre>
 	 */
 	public void init0(String dbType, String valueRulesYmlFilePath, String regexDictYmlFilePath) {
 		initDbType(dbType);
 		CommonDict.INSTANCE.init(regexDictYmlFilePath);
-		this.valueRulesMap = loadValueRulesYml(valueRulesYmlFilePath);
-	}
-
-	public void init(String valueRulesYmlFilePath) {
-		initDbType(DbType.mysql.name());
-		CommonDict.INSTANCE.init("");
-		this.valueRulesMap = loadValueRulesYml(valueRulesYmlFilePath);
-	}
-
-	public void init(String valueRulesYmlFilePath, String regexDictYmlFilePath) {
-		initDbType(DbType.mysql.name());
-		CommonDict.INSTANCE.init(regexDictYmlFilePath);
-		this.valueRulesMap = loadValueRulesYml(valueRulesYmlFilePath);
+		this.valueRulesMap = configLoader.loadValueRulesYml(valueRulesYmlFilePath);
 	}
 
 	/**
-	 * 使用了通用配置
-	 * @param valueRulesYmlFilePath
-	 * @param commonValueRulesYmlFilePath
+	 * 最简初始化。数据库默认为 MySQL，不加载自定义 common_dict。
+	 * @param valueRulesYmlFilePath value_rules.yml 的 classpath 路径
+	 * <pre>{@code
+	 * // 从 classpath 根目录加载 value_rules.yml
+	 * ValidatorEngine.INSTANCE.init("value_rules.yml");
+	 *
+	 * // 校验示例（读取上面配置后）：
+	 * boolean ok = ValidatorEngine.INSTANCE.validate("student.id", 1); // true
+	 * }</pre>
+	 */
+	public void init(String valueRulesYmlFilePath) {
+		initDbType(DbType.mysql.name());
+		CommonDict.INSTANCE.init("");
+		this.valueRulesMap = configLoader.loadValueRulesYml(valueRulesYmlFilePath);
+	}
+
+	/**
+	 * 初始化，自定义 common_dict 路径。数据库默认为 MySQL。
+	 * @param valueRulesYmlFilePath value_rules.yml 的 classpath 路径
+	 * @param regexDictYmlFilePath  common_dict.yml 的 classpath 路径
+	 * <pre>{@code
+	 * ValidatorEngine.INSTANCE.init("value_rules.yml", "my_custom_dict.yml");
+	 * }</pre>
+	 */
+	public void init(String valueRulesYmlFilePath, String regexDictYmlFilePath) {
+		initDbType(DbType.mysql.name());
+		CommonDict.INSTANCE.init(regexDictYmlFilePath);
+		this.valueRulesMap = configLoader.loadValueRulesYml(valueRulesYmlFilePath);
+	}
+
+	/**
+	 * 初始化，支持通用规则文件。数据库类型自定义。
+	 * @param dbType                      数据库类型名称
+	 * @param valueRulesYmlFilePath       主规则文件路径
+	 * @param commonValueRulesYmlFilePath 通用规则文件路径（可为 null）
+	 * @param regexDictYmlFilePath        common_dict 路径
+	 * <pre>{@code
+	 * ValidatorEngine.INSTANCE.init("mysql", "value_rules.yml",
+	 *     "common_value_rules.yml", "common_dict.yml");
+	 * }</pre>
 	 */
 	public void init(String dbType, String valueRulesYmlFilePath,
 					 String commonValueRulesYmlFilePath, String regexDictYmlFilePath) {
 		init0(dbType, valueRulesYmlFilePath, regexDictYmlFilePath);
 		if(commonValueRulesYmlFilePath != null) {
-			this.commonValueRulesMap = loadValueRulesYml(commonValueRulesYmlFilePath);
+			this.commonValueRulesMap = configLoader.loadValueRulesYml(commonValueRulesYmlFilePath);
 		}
 	}
 
 	/**
-	 * 使用了通用配置
-	 * @param valueRulesYmlFilePath
-	 * @param commonValueRulesYmlFilePath
+	 * 全参数初始化，支持通用规则文件和自定义忽略字段。
+	 * @param dbType                      数据库类型名称
+	 * @param valueRulesYmlFilePath       主规则文件路径
+	 * @param commonValueRulesYmlFilePath 通用规则文件路径（可为 null）
+	 * @param regexDictYmlFilePath        common_dict 路径
+	 * @param userIgnoreKeys              自定义忽略字段集合
+	 * @param customUseSnake              {@code true}=下划线命名模式，{@code false}=驼峰命名模式
+	 * <pre>{@code
+	 * Set<String> ignoreKeys = new HashSet<>(Arrays.asList("id", "version", "is_deleted"));
+	 * ValidatorEngine.INSTANCE.init("mysql", "value_rules.yml",
+	 *     null, "common_dict.yml", ignoreKeys, true);
+	 * }</pre>
 	 */
 	public void init(String dbType, String valueRulesYmlFilePath, String commonValueRulesYmlFilePath,
 					 String regexDictYmlFilePath,
@@ -214,22 +370,93 @@ public enum ValidatorEngine {
 	}
 
 	/**
-	 * 用户可以自定义忽略的字段
-	 * @param valueRulesYmlFilePath
-	 * @param userIgnoreKeys
+	 * 初始化（不带通用规则文件），支持自定义忽略字段。
+	 * @param dbType                数据库类型名称
+	 * @param valueRulesYmlFilePath 主规则文件路径
+	 * @param regexDictYmlFilePath  common_dict 路径
+	 * @param userIgnoreKeys        自定义忽略字段集合
+	 * @param customUseSnake        {@code true}=下划线命名模式，{@code false}=驼峰命名模式
+	 * <pre>{@code
+	 * Set<String> ignoreKeys = new HashSet<>(Arrays.asList("id", "version"));
+	 * ValidatorEngine.INSTANCE.init("mysql", "value_rules.yml",
+	 *     "common_dict.yml", ignoreKeys, false);
+	 * }</pre>
 	 */
 	public void init(String dbType, String valueRulesYmlFilePath, String regexDictYmlFilePath,
 					 Set<String> userIgnoreKeys, boolean customUseSnake) {
 		this.isSnakeKeyMode = customUseSnake;
 		ignoreKeys = userIgnoreKeys;
 		checkIgnoreKeysForLegality();
-
 		init0(dbType, valueRulesYmlFilePath, regexDictYmlFilePath);
 	}
 
+	/**
+	 * 从 rules 目录初始化（每表一个 yml 文件），数据库默认为 MySQL。
+	 * <pre>{@code
+	 * // resources/rules/ 目录结构：
+	 * //   rules/
+	 * //     student.yml
+	 * //     order.yml
+	 * //     product.yml
+	 * ValidatorEngine.INSTANCE.initFromDir("rules");
+	 * }</pre>
+	 * @param valueRulesDir rules 目录名称（相对于 classpath）
+	 */
+	public void initFromDir(String valueRulesDir) {
+		initDbType(DbType.mysql.name());
+		CommonDict.INSTANCE.init("");
+		this.valueRulesMap = configLoader.loadValueRulesYmlFromDir(valueRulesDir);
+	}
 
 	/**
-	 * 判断当前预设的忽略字段是否也满足键的模式
+	 * 从 rules 目录初始化，自定义 common_dict 路径。
+	 * @param valueRulesDir      rules 目录名称（相对于 classpath）
+	 * @param regexDictYmlFilePath common_dict.yml 路径
+	 * <pre>{@code
+	 * ValidatorEngine.INSTANCE.initFromDir("rules", "my_dict.yml");
+	 * }</pre>
+	 */
+	public void initFromDir(String valueRulesDir, String regexDictYmlFilePath) {
+		initDbType(DbType.mysql.name());
+		CommonDict.INSTANCE.init(regexDictYmlFilePath);
+		this.valueRulesMap = configLoader.loadValueRulesYmlFromDir(valueRulesDir);
+	}
+
+	/**
+	 * 从 rules 目录全参数初始化，支持通用规则目录、自定义忽略字段。
+	 * @param dbType               数据库类型名称
+	 * @param valueRulesDir        主规则目录（相对于 classpath）
+	 * @param commonValueRulesDir  通用规则目录（可为 null）
+	 * @param regexDictYmlFilePath common_dict 路径
+	 * @param userIgnoreKeys       自定义忽略字段集合
+	 * @param customUseSnake       {@code true}=下划线命名模式
+	 * <pre>{@code
+	 * Set<String> ignoreKeys = new HashSet<>(Arrays.asList("id", "version"));
+	 * ValidatorEngine.INSTANCE.initFromDir("mysql", "rules", null,
+	 *     "common_dict.yml", ignoreKeys, true);
+	 * }</pre>
+	 */
+	public void initFromDir(String dbType, String valueRulesDir, String commonValueRulesDir,
+							String regexDictYmlFilePath,
+							Set<String> userIgnoreKeys, boolean customUseSnake) {
+		this.isSnakeKeyMode = customUseSnake;
+		ignoreKeys = userIgnoreKeys;
+		checkIgnoreKeysForLegality();
+
+		initDbType(dbType);
+		CommonDict.INSTANCE.init(regexDictYmlFilePath);
+		this.valueRulesMap = configLoader.loadValueRulesYmlFromDir(valueRulesDir);
+
+		if(commonValueRulesDir != null) {
+			this.commonValueRulesMap = configLoader.loadValueRulesYmlFromDir(commonValueRulesDir);
+		}
+	}
+
+	/**
+	 * 校验自定义忽略字段的合法性。<br>
+	 * 当下划线模式时，字段名不能包含大写字母；当驼峰模式时，字段名不能包含下划线。
+	 *
+	 * @throws IllegalArgumentException 如果字段名不匹配当前命名模式
 	 */
 	private void checkIgnoreKeysForLegality() {
 		for(String key : ignoreKeys) {
@@ -252,138 +479,41 @@ public enum ValidatorEngine {
 		}
 	}
 
-	/**
-	 * 读取 value_rules.yml 文件
-	 * 这个文件应该放在foundation工程中
-	 * @param ymlFilePath
-	 * @return
-	 */
-	public static Map<String, Object> loadRuleDictYml(String ymlFilePath) {
-		Yaml yaml = new Yaml();
-
-		Map<String, Object> map = new ConcurrentHashMap<>(2);
-
-		List<Map<String, Object>> listMap = new ArrayList<>();
-		Enumeration<URL> ps;
-		try {
-			ps = App.class.getClassLoader().getResources(ymlFilePath);
-		} catch (IOException e) {
-			throw new IllegalArgumentException(e);
-		}
-
-		while(ps.hasMoreElements()) {
-			URL url = ps.nextElement();
-			try (InputStream is = url.openStream()) {
-				/**
-				 *  读取所有输入,包括回车换行符
-				 *  \\A为正则表达式,表示从字符头开始
-				 *
-				 *  hasNext()：如果输入源中还有下一个标记（非空格字符），返回 true。
-				 */
-				Scanner s = new Scanner(is).useDelimiter("\\A");
-				/** originValueRulesStr 会得到配置全文 */
-				String originValueRulesStr = s.hasNext() ? s.next() : "";
-
-				Map<String, Object> mapValueDict = yaml.loadAs(originValueRulesStr, Map.class);
-				listMap.add(mapValueDict);
-			}
-			catch (IOException e) {
-				e.printStackTrace();
-			}
-		}
-
-		if(listMap.size() > 1) {
-			/**
-			 * 1.会加载bay-validator自身的预制配置
-			 * 2.会加载用户定义的 common_dict
-			 * 最后加载的是用户自定义的 common_dict 的配置文件，所以需要reverse
-			 */
-			Collections.reverse(listMap);
-		}
-
-		/**
-		 * map 会融合bay-validator自身的预制配置和用户定义的 common_dict
-		 */
-		listMap.forEach((itemMap) -> map.putAll(itemMap));
-		return map;
-	}
+	// ===================== 规则查询 =====================
 
 	/**
-	 * 读取 value_rules.yml 文件
-	 * 这个文件应该放在foundation工程中
-	 * @param valueRulesYmlFilePath
-	 * @return
-	 */
-	public static Map<String, Map<String, Object>> loadValueRulesYml(String valueRulesYmlFilePath) {
-		Yaml yaml = new Yaml();
-
-		Map<String, Map<String, Object>> map = new ConcurrentHashMap<>(2);
-
-		List<Map<String, Map<String, Object>>> listMap = new ArrayList<>();
- 		Enumeration<URL> ps;
-		try {
-			ps = App.class.getClassLoader().getResources(valueRulesYmlFilePath);
-		} catch (IOException e) {
-			throw new IllegalArgumentException(e);
-		}
-
-		while(ps.hasMoreElements()) {
-			URL url = ps.nextElement();
-
-			try (InputStream is = url.openStream()) {
-				/**
-				 *  读取所有输入,包括回车换行符
-				 *  \\A为正则表达式,表示从字符头开始
-				 */
-				Scanner s = new Scanner(is).useDelimiter("\\A");
-				String originValueRulesStr = s.hasNext() ? s.next() : "";
-
-				Map<String, Map<String, Object>> mapValueDict = yaml.loadAs(originValueRulesStr, Map.class);
-				listMap.add(mapValueDict);
-			}
-			catch (IOException e) {
-				e.printStackTrace();
-			}
-		}
-
-		if(listMap.size() > 1) {
-			/**
-			 * 最后加载的是bay-validator本身的配置文件
-			 */
-			Collections.reverse(listMap);
-		}
-
-		listMap.forEach((itemMap) -> map.putAll(itemMap));
-
-		return map;
-	}
-
-	/**
-	 * 判断规则是否存在
-	 * 
-	 * @param tableName
-	 * @param fieldName
-	 * @return
+	 * 判断指定表名和字段名是否有校验规则。
+	 * @param tableName 表名，如 {@code "student"}
+	 * @param fieldName 字段名，如 {@code "id"}
+	 * @return 存在非空规则则返回 {@code true}
+	 * <pre>{@code
+	 * boolean existed = ValidatorEngine.INSTANCE.isRuleExisted("student", "id"); // true
+	 * boolean existed2 = ValidatorEngine.INSTANCE.isRuleExisted("student", "no_such_field"); // false
+	 * }</pre>
 	 */
 	public boolean isRuleExisted(String tableName, String fieldName) {
 		Map<String, Object> fieldsMap = this.valueRulesMap.get(tableName);
 		if(fieldsMap == null) {
 			return false;
 		}
-
 		Map<String, Object> rulesMap = (Map<String, Object>) fieldsMap.get(fieldName);
 		if(rulesMap == null) {
 			return false;
 		}
-
 		return rulesMap.size() > 0;
 	}
 
 	/**
-	 * 获得配置的FieldRule形式校验规则
+	 * 根据 fieldKey 获取对应的 {@link FieldRule} 实例。
+	 * @param fieldKey 格式为 {@code tableName.fieldName}，如 {@code "student.id"}
+	 * @return {@link FieldRule} 实例，如果未找到则返回 {@code null}
+	 * <pre>{@code
+	 * FieldRule rule = ValidatorEngine.INSTANCE.getFieldRules("student.id");
+	 * // 返回 NumericFieldRule {type="numeric", numericMin=1, numericMax=128}
 	 *
-	 * @param fieldKey
-	 * @return
+	 * FieldRule rule2 = ValidatorEngine.INSTANCE.getFieldRules("student.gender");
+	 * // 返回 EnumStringFieldRule {type="enum_string", enumValues=["male","female"]}
+	 * }</pre>
 	 */
 	public FieldRule getFieldRules(String fieldKey) {
 		Map<String, Object> rulesMap = getRulesMap(fieldKey);
@@ -391,29 +521,29 @@ public enum ValidatorEngine {
 	}
 
 	/**
-	 * 通过fieldKey获得配置的Map形式校验规则
-	 * @param fieldKey
-	 * @return
+	 * 从 fieldKey 中拆分 tableName 和 fieldName，再查询规则 Map。
+	 * @param fieldKey 格式 {@code "table.field"} 或纯字段名（自动补 {@code _common} 前缀）
+	 * @return 规则 Map，未找到则返回 null
 	 */
 	private Map<String, Object> getRulesMap(String fieldKey) {
 		String[] keys = secureFieldKey(fieldKey);
-
-		String tableName = keys[0];
-		String fieldName = keys[1];
-
-		return getRuleMap(tableName, fieldName);
+		return getRuleMap(keys[0], keys[1]);
 	}
 
 	/**
-	 * 校验并处理field key
-	 * @param fieldKey
-	 * @return
+	 * 安全性解析 fieldKey。
+	 * <ul>
+	 *   <li>{@code "student.id"} → {@code ["student", "id"]}</li>
+	 *   <li>{@code "status"}     → {@code ["_common", "status"]}（自动补 {@code _common}）</li>
+	 * </ul>
+	 * @param fieldKey 字段键值
+	 * @return 长度为 2 的数组，[tableName, fieldName]
+	 * @throws IllegalArgumentException 如果 fieldKey 为 null
 	 */
 	private String[] secureFieldKey(String fieldKey) {
 		if(fieldKey == null) {
 			throw new IllegalArgumentException("fieldKey is illegal");
 		}
-
 		String[] keys = fieldKey.split("\\.");
 		if(keys.length != 2) {
 			keys = new String[]{"_common", keys[0]};
@@ -422,10 +552,24 @@ public enum ValidatorEngine {
 	}
 
 	/**
-	 * 通过tableName， fieldName获得配置的Map形式校验规则
-	 * @param tableName
-	 * @param fieldName
-	 * @return
+	 * 通过 tableName 和 fieldName 查询配置规则。
+	 * <p>优先从 {@link #valueRulesMap} 查找，找不到时回退到 {@link #commonValueRulesMap}。</p>
+	 * @param tableName 表名
+	 * @param fieldName 字段名
+	 * @return 规则配置 Map，未找到则返回 null
+	 * <pre>{@code
+	 * // 假设 valueRulesMap = { "student": { "id": {"type":"numeric", ...} } }
+	 * // 假设 commonValueRulesMap = { "_common": { "status": {"type":"enum_string", ...} } }
+	 *
+	 * Map<String, Object> idRule = getRuleMap("student", "id");
+	 * // → {"type":"numeric", "numeric_min":1, "numeric_max":128}
+	 *
+	 * Map<String, Object> statusRule = getRuleMap("_common", "status");
+	 * // → {"type":"enum_string", "enum_values":["active","inactive"]}
+	 *
+	 * Map<String, Object> none = getRuleMap("student", "no_such_field");
+	 * // → null
+	 * }</pre>
 	 */
 	private Map<String, Object> getRuleMap(String tableName, String fieldName) {
 		Map<String, Object> fieldsMap = this.valueRulesMap.get(tableName);
@@ -433,13 +577,11 @@ public enum ValidatorEngine {
 			if(this.commonValueRulesMap == null) {
 				return null;
 			}
-
 			fieldsMap = this.commonValueRulesMap.get(tableName);
 			if(fieldsMap == null) {
 				return null;
 			}
 		}
-
 		Map<String, Object> rulesMap = (Map<String, Object>) fieldsMap.get(fieldName);
 		if(rulesMap == null) {
 			return null;
@@ -448,27 +590,48 @@ public enum ValidatorEngine {
 	}
 
 	/**
-	 * 根据yml的配置建立FieldRule对象
-	 * @param rulesMap
-	 * @return
+	 * 根据规则 Map 构建 {@link FieldRule} 实例。
+	 * @param fieldKey 字段键
+	 * @param rulesMap 规则配置 Map
+	 * @return FieldRule 具体子类实例
+	 * @throws NullPointerException 如果 {@code type} 对应的工厂方法不存在
+	 * <pre>{@code
+	 * // 输入：
+	 * //   fieldKey = "student.id"
+	 * //   rulesMap = {"type":"numeric", "numeric_min":1, "numeric_max":128}
+	 * // 输出：NumericFieldRule{fieldKey="student.id", type="numeric", numericMin=1, numericMax=128}
+	 * }</pre>
 	 */
 	private FieldRule buildFieldRule(String fieldKey, Map<String, Object> rulesMap) {
 		String type = (String) rulesMap.get(RuleKey.type.name());
-
 		FieldRule fr = fieldRuleMap.get(type).get();
 		if(fr == null) {
 			return null;
 		}
-
 		fr.build(fieldKey, type, rulesMap);
 		return fr;
 	}
 
-
+	// ===================== 规则序列化为 JSON =====================
 
 	/**
-	 * 获得配置的校验规则项
-	 * @return
+	 * 获取指定字段的完整校验规则（Map 形式，外层包裹 fieldKey）。
+	 * @param fieldKey 格式 {@code "table.field"}
+	 * @return Map，key = fieldKey，value = 规则 JSON Map
+	 * <pre>{@code
+	 * Map<String, Object> result = ValidatorEngine.INSTANCE.getFieldValidatorRules("student.phone_number");
+	 * // 输出：
+	 * // {
+	 * //   "student.phone_number": {
+	 * //     "type": "string",
+	 * //     "stringCharset": "utf8",
+	 * //     "stringRegexKey": "phone_number",
+	 * //     "stringLengthMin": 11,
+	 * //     "stringLengthMax": 11,
+	 * //     "regexStr": "^1[3|4|5|7|8][0-9]{9}$"
+	 * //   }
+	 * // }
+	 * }</pre>
 	 */
 	public Map<String, Object> getFieldValidatorRules(String fieldKey) {
 		Map<String, Object> map = new HashMap<>(1);
@@ -477,112 +640,177 @@ public enum ValidatorEngine {
 	}
 
 	/**
-	 * 获得配置的校验规则项的字符串形式
-	 * @return
+	 * 获取指定字段的校验规则 JSON 字符串。
+	 * @param fieldKey 格式 {@code "table.field"}
+	 * @return JSON 字符串
+	 * <pre>{@code
+	 * String json = ValidatorEngine.INSTANCE.getFieldValidatorRulesStr("student.phone_number");
+	 * // json = "{\"student.phone_number\":{\"type\":\"string\", ...}}"
+	 * }</pre>
 	 */
 	public String getFieldValidatorRulesStr(String fieldKey) {
 		try {
 			return mapper.writeValueAsString(this.getFieldValidatorRules(fieldKey));
-		} catch (JsonProcessingException e) {
-			e.printStackTrace();
-		}
-		return null;
+	} catch (JsonProcessingException e) {
+		LOG.log(Level.WARNING, "Failed to serialize field rules for " + fieldKey, e);
 	}
+	return null;
+}
 
-
-    /**
-     * 获得配置的校验规则的json map
-	 * 就是FieldRule的Map表达
-     * @param fieldKey
-     * @return
-     */
-    public Map<String, Object> getFieldValidatorRulesJson(String fieldKey) {
-        FieldRule fieldRule = this.getFieldRules(fieldKey);
-        if (fieldRule == null) {
-        	return null;
+/**
+ * 获取指定字段的校验规则（纯规则 Map，不含 fieldKey 包裹）。
+	 * <p>对于 {@code type="string"} 类型的字段，会自动从 {@link CommonDict} 中取出正则表达式并追加到 {@code regexStr} 字段。</p>
+	 * @param fieldKey 格式 {@code "table.field"}
+	 * @return 规则 Map
+	 * <pre>{@code
+	 * // 数值类型字段（不追加 regexStr）：
+	 * Map<String, Object> rule = ValidatorEngine.INSTANCE.getFieldValidatorRulesJson("student.id");
+	 * // → {"fieldKey":"", "type":"numeric", "numericMin":1, "numericMax":128}
+	 *
+	 * // 字符串类型字段（自动追加 regexStr）：
+	 * Map<String, Object> rule2 = ValidatorEngine.INSTANCE.getFieldValidatorRulesJson("student.phone_number");
+	 * // → {"fieldKey":"", "type":"string", "stringCharset":"utf8", "stringLengthMin":11,
+	 * //    "stringLengthMax":11, "stringRegexKey":"phone_number", "regexStr":"^1[3|4|5|7|8][0-9]{9}$"}
+	 *
+	 * // 枚举类型字段：
+	 * Map<String, Object> rule3 = ValidatorEngine.INSTANCE.getFieldValidatorRulesJson("student.gender");
+	 * // → {"fieldKey":"", "type":"enum_string", "enumValues":["male","female"]}
+	 *
+	 * // 不存在的字段：
+	 * Map<String, Object> rule4 = ValidatorEngine.INSTANCE.getFieldValidatorRulesJson("nonexist.field");
+	 * // → null
+	 * }</pre>
+	 */
+	public Map<String, Object> getFieldValidatorRulesJson(String fieldKey) {
+		FieldRule fieldRule = this.getFieldRules(fieldKey);
+		if(fieldRule == null) {
+			return null;
 		}
-
-		/**
-		 * 不需要返回fieldKey
-		 */
 		fieldRule.setFieldKey("");
 
-        try {
-            mapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
-            String jsonStr = mapper.writeValueAsString(fieldRule);
+		try {
+			mapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
+			String jsonStr = mapper.writeValueAsString(fieldRule);
 
-            if(!RuleType.string.name().equals(fieldRule.getType())) {
-				//System.out.println("jsonStr:" + jsonStr);
-                /**
-                 * 如果不是string类型，则不需要补充正则表达式
-                 */
-                return mapper.readValue(jsonStr, Map.class);
-            }
+			if(!RuleType.string.name().equals(fieldRule.getType())) {
+				return mapper.readValue(jsonStr, Map.class);
+			}
 
-            String regexKey = fieldRule.getStringRegexKey();
-			//System.out.println("fieldRule.getStringRegexKey():" + regexKey);
-            String regexStr = (String) CommonDict.INSTANCE.getRule(regexKey);
-			//System.out.println("regexStr:" + regexStr);
-            if(StringUtils.isBlank(regexStr)) {
-                throw new IllegalStateException(String.format("regex is blank, regexKey is %s", regexKey));
-            }
+			String regexKey = fieldRule.getStringRegexKey();
+			String regexStr = (String) CommonDict.INSTANCE.getRule(regexKey);
+			if(StringUtils.isBlank(regexStr)) {
+				throw new IllegalStateException(String.format("regex is blank, regexKey is %s", regexKey));
+			}
 
-            /**
-             * 如果校验类型是string，则需要取出正则表达式
-             */
-            Map m = mapper.readValue(jsonStr, Map.class);
-            m.put("regexStr", regexStr);
-            return m;
-        } catch (JsonProcessingException e) {
-            e.printStackTrace();
-        }
+			Map m = mapper.readValue(jsonStr, Map.class);
+			m.put("regexStr", regexStr);
+			// 指示 JS 端按字符数还是字节数做长度校验
+			String charset = fieldRule.getStringCharset();
+			m.put("lengthMode", org.apache.commons.lang3.StringUtils.isBlank(charset) ? "char" : "byte");
+			return m;
+	} catch (JsonProcessingException e) {
+		LOG.log(Level.WARNING, "Failed to build field rule JSON for " + fieldKey, e);
+	}
+	return null;
+}
 
-        return null;
-    }
-
-
-	/**
-	 * 获得配置的校验规则的json字符串
-	 *
-	 * @param fieldKey
-	 * @return
-	 * @throws JsonProcessingException
+/**
+ * 获取指定字段的校验规则 JSON 字符串（不含 fieldKey 外层包裹）。
+	 * @param fieldKey 格式 {@code "table.field"}
+	 * @return JSON 字符串
+	 * <pre>{@code
+	 * String json = ValidatorEngine.INSTANCE.getFieldValidatorRulesJsonStr("student.game_long_card");
+	 * // json = "{\"fieldKey\":\"\",\"type\":\"enum_numeric\",\"enumValues\":[3000000000,4000000000]}"
+	 * }</pre>
 	 */
 	public String getFieldValidatorRulesJsonStr(String fieldKey) {
-        try {
-            return mapper.writeValueAsString(this.getFieldValidatorRulesJson(fieldKey));
-        } catch (JsonProcessingException e) {
-            e.printStackTrace();
-        }
-        return null;
-    }
+		try {
+			return mapper.writeValueAsString(this.getFieldValidatorRulesJson(fieldKey));
+	} catch (JsonProcessingException e) {
+		LOG.log(Level.WARNING, "Failed to serialize field rule JSON for " + fieldKey, e);
+	}
+	return null;
+}
 
-	/**
-	 * 获取某个字段的枚举配置，如果不是枚举类型，则返回null
-	 * @param fieldKey
-	 * @return
-	 */
-    public List<Object> getEnumValues(String fieldKey) {
-		//System.out.println("getEnumValues:" + fieldKey);
+public List<Object> getEnumValues(String fieldKey) {
 		Map<String, Object> ruleJson = this.getFieldValidatorRulesJson(fieldKey);
-		//System.out.println("getEnumValues ruleJson:" + ruleJson);
 		if(ruleJson == null) {
 			return null;
 		}
-
 		String type = (String) ruleJson.get(RuleKey.type.name());
 		if(RuleType.isEnum(type)) {
 			return (List<Object>) ruleJson.get(NameUtil.lineToHump(RuleKey.enum_values.name()));
 		}
-
 		return null;
 	}
 
+	// ===================== 校验入口 =====================
+
 	/**
-	 * 校验
-	 * @param validatorKey
-	 * @param paramValue
-	 * @return
+	 * <b>单字段校验。</b>
+	 * <p>根据配置的规则校验单个参数值。</p>
+	 *
+	 * <p><b>校验规则类型对照表：</b>
+	 * <pre>{@code
+	 * type           | 校验方式
+	 * ---------------|------------------------------
+	 * numeric        | 转 BigInteger，检查最小值≤值≤最大值
+	 * decimal        | 转 BigDecimal，检查最小值≤值≤最大值
+	 * string         | 检查字符长度（支持 charset），正则匹配
+	 * enum_string    | 检查值是否在枚举列表中
+	 * enum_numeric   | 转 BigInteger/BigDecimal，检查是否在枚举列表中
+	 * enum_decimal   | 同上（使用 BigDecimal）
+	 * date           | 解析 yyyy-MM-dd，检查是否在 [beginAt, endAt) 范围内
+	 * datetime       | 解析 yyyy-MM-dd HH:mm:ss，检查是否在 [beginAt, endAt) 范围内
+	 * }</pre>
+	 *
+	 * @param validatorKey 字段 key，格式 {@code "tableName.fieldName"}。
+	 *                     如果仅传入字段名（不含 {@code .}），则自动补 {@code "_common."} 前缀
+	 * @param paramValue   待校验的参数值，支持 String、Number、Boolean、Date 等
+	 * @return 校验通过返回 {@code true}，否则返回 {@code false}
+	 * @throws IllegalStateException 如果对应的规则未找到
+	 *
+	 * <pre>{@code
+	 * // 假设 YAML 配置如下：
+	 * // student:
+	 * //   id:          { type: numeric, numeric_min: 1, numeric_max: 128 }
+	 * //   gender:      { type: enum_string, enum_values: [male, female] }
+	 * //   phone_number:{ type: string, string_regex_key: phone_number, string_length_min: 11, string_length_max: 11 }
+	 * //   money:       { type: decimal, decimal_min: 0.00, decimal_max: 300.00 }
+	 * //   birthday:    { type: date, begin_at: 2020-01-01, end_at: 2030-12-31 }
+	 * //   game_card:   { type: enum_numeric, enum_values: [1, 2] }
+	 * //   game_long_card: { type: enum_numeric, enum_values: [3000000000, 4000000000] }
+	 *
+	 * ValidatorEngine.INSTANCE.init("value_rules.yml");
+	 *
+	 * // --- numeric ---
+	 * ValidatorEngine.INSTANCE.validate("student.id", 1);               // true,  1 ∈ [1, 128]
+	 * ValidatorEngine.INSTANCE.validate("student.id", 0);               // false, 0 ∉ [1, 128]
+	 * ValidatorEngine.INSTANCE.validate("student.id", "2");             // true,  字符串自动转数字
+	 *
+	 * // --- decimal ---
+	 * ValidatorEngine.INSTANCE.validate("student.money", "200.00");     // true,  200.00 ∈ [0, 300]
+	 * ValidatorEngine.INSTANCE.validate("student.money", "300.01");     // false, 300.01 ∉ [0, 300]
+	 *
+	 * // --- string ---
+	 * ValidatorEngine.INSTANCE.validate("student.phone_number", "15973166256");  // true, 符合长度和正则
+	 * ValidatorEngine.INSTANCE.validate("student.phone_number", "159731662561"); // false, 超长
+	 * ValidatorEngine.INSTANCE.validate("student.phone_number", "19973166256");  // false, 正则不匹配
+	 *
+	 * // --- enum_string ---
+	 * ValidatorEngine.INSTANCE.validate("student.gender", "male");       // true
+	 * ValidatorEngine.INSTANCE.validate("student.gender", "other");      // false
+	 *
+	 * // --- enum_numeric ---
+	 * ValidatorEngine.INSTANCE.validate("student.game_card", 1);         // true
+	 * ValidatorEngine.INSTANCE.validate("student.game_card", 3);         // false
+	 * ValidatorEngine.INSTANCE.validate("student.game_long_card", 3000000000l);  // true
+	 * ValidatorEngine.INSTANCE.validate("student.game_long_card", 2000000000l);  // false
+	 *
+	 * // --- 使用 _common 前缀（不写表名）---
+	 * // 当 validate("status", value) 时，会自动查找 _common.status 的规则
+	 * ValidatorEngine.INSTANCE.validate("status", "active");  // 查找 "_common.status" 的规则
+	 * }</pre>
 	 */
 	public boolean validate(String validatorKey, Object paramValue) {
 		FieldRule fr = this.getFieldRules(validatorKey);
@@ -595,22 +823,53 @@ public enum ValidatorEngine {
 		return fr.validate(paramValue);
 	}
 
-
 	/**
-	 * JavaScript的数据类型，共有9种：
-	 * 值类型(基本类型)：字符串（String）、数字(Number)、布尔(Boolean)、空（Null）、未定义（Undefined）、Symbol。
-	 * 引用数据类型：    对象(Object)、数组(Array)、函数(Function)。
+	 * <b>Java Bean 对象校验。</b>
+	 * <p>遍历 Bean 的所有属性，使用 {@code prefix.propertyName} 作为 fieldKey 逐个校验。</p>
 	 *
-	 * Function<T,R>可以允许我们自定一个函数，通过给定参数T返回结果R
+	 * <p><b>处理流程：</b>
+	 * <ol>
+	 *   <li>通过 Introspector 获取所有属性描述符</li>
+	 *   <li>过滤掉没有 setter 方法的属性（不校验）</li>
+	 *   <li>根据 {@link #isSnakeKeyMode} 决定是否将属性名从驼峰转为下划线</li>
+	 *   <li>忽略 {@link #ignoreKeys} 和 {@code customIgnoreKeys} 中指定的字段</li>
+	 *   <li>跳过不支持的类型（日期类型直接通过，复杂对象抛异常）</li>
+	 *   <li>空值判断：在 {@code nullableKeys} 中的跳过，否则记为错误</li>
+	 *   <li>非空值：调用 {@link #validate(String, Object)} 进行校验</li>
+	 * </ol>
 	 *
-	 * @param bean
-	 * @param prefix
-	 * @param customIgnoreKeys
-	 * @param nullableKeys
-	 * @return
+	 * @param bean             待校验的 Java Bean 对象
+	 * @param prefix           表名/前缀，用于拼接 fieldKey（如 {@code "student"}）
+	 * @param customIgnoreKeys  额外忽略的字段名数组（可为 null）
+	 * @param nullableKeys      允许为空的字段名数组（可为 null）
+	 * @return 校验失败的字段名列表（全部通过时返回空列表）
+	 *
+	 * <pre>{@code
+	 * // 假设 Student 类：
+	 * //   private int id;
+	 * //   private String phoneNumber;
+	 * //   private String gender;
+	 * //   private BigDecimal money;
+	 * //   private long gameLongCard;
+	 * //   private int version;
+	 *
+	 * Student student = new Student();
+	 * student.setPhoneNumber("15973166256");
+	 * student.setGender("male");
+	 * student.setMoney(new BigDecimal("200.00"));
+	 * student.setGameLongCard(4000000000L);
+	 *
+	 * List<String> errors = ValidatorEngine.INSTANCE.validate(student, "student",
+	 *     new String[]{"version"},        // 额外忽略 version 字段
+	 *     new String[]{"id"});             // id 字段允许为空
+	 *
+	 * // 如果 phoneNumber 格式不对，errors 包含 "phone_number"
+	 * // 如果 gender 不是 male/female，errors 包含 "gender"
+	 * // 如果所有字段都合规，errors 为空列表 []
+	 * }</pre>
 	 */
 	public List<String> validate(Object bean, String prefix,
-							String[] customIgnoreKeys, String[] nullableKeys) {
+								 String[] customIgnoreKeys, String[] nullableKeys) {
 		List<String> errorKeys = new ArrayList<>();
 		try {
 			BeanInfo beanInfo = Introspector.getBeanInfo(bean.getClass());
@@ -627,17 +886,7 @@ public enum ValidatorEngine {
 			if (proDescriptors != null && proDescriptors.length > 0) {
 				for (PropertyDescriptor propDesc : proDescriptors) {
 
-
-					/**
-					 * 如果不存在写属性，说明不是get 和 set 方法
-					 *
-					 * 只有 void  setXXX 才会被认为是WriteMethod
-					 */
 					if (propDesc.getWriteMethod() == null) {
-						/**
-						 * 针对有些直接使用po传递controller参数的时候，set方法可能返回值不是void的情况
-						 * 虽然这样写不够纯粹，但是方便。不用重复定义类似的对象
-						 */
 						String poSetMethod = "s" + propDesc.getReadMethod().getName().substring(1);
 						if(!setMethodCache.contains(poSetMethod)) {
 							continue;
@@ -645,10 +894,6 @@ public enum ValidatorEngine {
 					}
 
 					String name = propDesc.getName();
-
-					/**
-					 * 可以使用驼峰或者下划线
-					 */
 					if(isSnakeKeyMode) {
 						name = NameUtil.humpToLine(name);
 					}
@@ -656,31 +901,21 @@ public enum ValidatorEngine {
 					Method method = propDesc.getReadMethod();
 					Object value = method.invoke(bean);
 
-					/**
-					 * 初始化时设定的可以忽略的键
-					 */
 					if(ignoreKeys.contains(name)) {
-						/** 忽略值的处理 */
 						continue;
 					}
 
-					/**
-					 * 用户定义的可以忽略的键
-					 */
 					if(customIgnoreKeys != null) {
 						if( Arrays.asList(customIgnoreKeys).contains(name)) {
-							/** 忽略值的处理 */
 							continue;
 						}
 					}
 
 					if((value != null) && !(value instanceof String) && !(value instanceof Number)
 							&& (!(value instanceof Boolean))) {
-						// 如果是日期类型，这里不支持校验范围，直接忽略
 						if( (value instanceof LocalDateTime) || (value instanceof LocalDate) || (value instanceof Date) ) {
 							continue;
 						}
-
 						throw new UnsupportedOperationException(
 								String.format("The type of parameter is not supported, name: %s, value: %s"
 								, name, mapper.writeValueAsString(value)));
@@ -688,16 +923,11 @@ public enum ValidatorEngine {
 
 					String valueStr = value == null ? "" : String.valueOf(value);
 					if(StringUtils.isBlank(valueStr)) {
-						/**
-						 * 非强制校验的键
-						 */
 						if(nullableKeys != null) {
 							if(Arrays.asList(nullableKeys).contains(name)) {
-								/** 忽略值的处理 */
 								continue;
 							}
 						}
-
 						errorKeys.add(name);
 						continue;
 					}
@@ -709,200 +939,114 @@ public enum ValidatorEngine {
 					}
 				}
 			}
-
 			return errorKeys;
 		} catch (Exception e) {
 			throw new IllegalStateException(e);
 		}
 	}
 
+	// ===================== 代码生成（委托给 EnumCodeGenerator） =====================
 
 	/**
-	 * 根据yml中的配置，将enum类型的配置生成java代码，供后端使用
-	 * 特别注意，只生成有确定取值的字段，
-	 * 如果所有字段都是String或者Integer类型，则该类中内容可能只剩下表名
-	 * @param packageName
+	 * 根据当前加载的 valueRulesMap 中的枚举类型配置，生成 Java 枚举代码。
+	 * <p>仅对 {@code enum_string}、{@code enum_numeric}、{@code enum_decimal} 类型的字段生成。</p>
+	 *
+	 * @param packageName 目标 Java 包名，如 {@code "com.baymax.pvg2.values"}
+	 * @return 格式化后的 Java 源码字符串
+	 *
+	 * <pre>{@code
+	 * // 假设配置中有枚举字段：
+	 * // student.game_long_card: enum_numeric, values: [3000000000, 4000000000]
+	 * // student.float_card:     enum_decimal, values: [3.11, 4000000000.123456]
+	 *
+	 * ValidatorEngine.INSTANCE.init("value_rules_enum_output_test.yml");
+	 * String source = ValidatorEngine.INSTANCE.generateJavaEnumCode("com.baymax.pvg2.values");
+	 * // 生成的代码片段：
+	 * // public final class ValueEnumRange implements Serializable {
+	 * //   public static final class student {
+	 * //     public enum float_card {
+	 * //       NUMBER_3$11(new BigDecimal("3.11")),
+	 * //       NUMBER_4000000000$123456(new BigDecimal("4000000000.123456"));
+	 * //     }
+	 * //   }
+	 * // }
+	 * }</pre>
 	 */
 	public String generateJavaEnumCode(String packageName) {
-		Engine.setFastMode(true);
-		Engine engine = Engine.use();
-		engine.setDevMode(true);
-		engine.setToClassPathSourceFactory();
-
-		if(this.valueRulesMap == null) {
-			throw new IllegalStateException("this.valueRulesMap is null");
+		if(enumCodeGenerator == null) {
+			enumCodeGenerator = new EnumCodeGenerator(this);
 		}
-
-		Iterator<Map.Entry<String, Map<String, Object>>> itTable = this.valueRulesMap.entrySet().iterator();
-
-		List<String> tableTemplateList = new ArrayList<>();
-		Set<String> importList = new HashSet<>();
-		while(itTable.hasNext()) {
-			/**
-			 * 遍历所有的表名
-			 */
-			Map.Entry<String, Map<String, Object>> entryTable = itTable.next();
-			String tableName = entryTable.getKey();
-			Map<String, Object> tableRuleMap = entryTable.getValue();
-			if(tableRuleMap == null) {
-				throw new IllegalStateException(String.format("yaml's format is illegal, table name is %s", tableName));
-			}
-
-			Iterator<Map.Entry<String, Object>> itField = tableRuleMap.entrySet().iterator();
-
-			List<String> fieldRuleTemplateList = new ArrayList<>();
-			while(itField.hasNext()) {
-				Map.Entry<String, Object> entryField = itField.next();
-				String fieldName = entryField.getKey();
-				Object fieldRuleMapObj = entryField.getValue();
-				if(!(fieldRuleMapObj instanceof Map)) {
-					throw new IllegalStateException(String.format(
-							"yaml's format is illegal, field name is %s.%s", tableName, fieldName));
-				}
-
-				Map<String, Object> fieldRuleMap = (Map<String, Object>)fieldRuleMapObj;
-				String type = (String) fieldRuleMap.get(RuleKey.type.name());
-				if(!RuleType.isEnum(type)) {
-					continue;
-				}
-
-				List<Object> enumValues = Common.getEnumValues(fieldRuleMap);
-				Map<Object, String> enumDict = Common.getEnumDict(fieldRuleMap);
-
-				JavaEnum je = JavaEnumTemplateRender.build(fieldName, type, enumValues, enumDict);
-				importList.add("import " + je.getCanonicalJavaType());
-
-				Kv cond = Kv.by(Const.TemplateKey.fieldName.name(), fieldName)
-						.set(Const.TemplateKey.enumValues.name(), je.getEnumValues())
-						.set(Const.TemplateKey.javaType.name(), je.getJavaType());
-				String template = engine.getTemplate(Const.ENUM_FIELD_RULE_FILENAME).renderToString(cond);
-				//System.out.println(template);
-				fieldRuleTemplateList.add(template);
-			}
-
-
-			Kv cond = Kv.by(Const.TemplateKey.tableName.name(), tableName)
-					.set(Const.TemplateKey.fieldRuleList.name(), fieldRuleTemplateList);
-			String tableTemplate = engine.getTemplate(Const.TABLE_FILENAME).renderToString(cond);
-			// System.out.println(tableTemplate);
-			tableTemplateList.add(tableTemplate);
+		if(formatter != null) {
+			enumCodeGenerator.setFormatter(formatter);
 		}
-
-		String importStr = StringUtils.join(importList, ";") + ";";
-		Kv cond = Kv.by(Const.TemplateKey.tableList.name(), tableTemplateList)
-				.set("package", packageName)
-				.set("import", importStr)
-				.set(Const.TemplateKey.generateTime.name(), DateFormatUtils.format(new Date(), "yyyy-MM-dd HH:mm:ss"));
-		String valueRangeTemplate = engine.getTemplate(Const.VALUE_ENUM_RANGE_FILENAME).renderToString(cond);
-
-		String formatSource = formatJava(valueRangeTemplate);
-		System.out.println(formatSource);
-		return formatSource;
+		return enumCodeGenerator.generateJavaEnumCode(packageName);
 	}
 
-
 	/**
+	 * 将生成的内容写入文件。
+	 * @param fileName   文件名（不含后缀）
+	 * @param packageName Java 包名
+	 * @param content    文件内容
+	 * @param toSrcTest  {@code true}=写入 src/test/java，{@code false}=写入 src/main/java
 	 *
-	 * @param oldYmlPath
-	 * @param dataSource
-	 * @param exceptTables
-	 * @return
-	 * @throws SQLException
+	 * <pre>{@code
+	 * ValidatorEngine.INSTANCE.writeToFile("ValueEnumRange",
+	 *     "com.baymax.pvg2.values", sourceCode, true);
+	 * // 写入到: target/classes/../../src/test/java/com/baymax/pvg2/values/ValueEnumRange.java
+	 * }</pre>
 	 */
-	public String generateDefaultYml(String oldYmlPath, DataSource dataSource, String databaseName, List<String> exceptTables)
-			throws SQLException {
-		List<String> tables = TableMetaKit.getTables(dataSource, databaseName, exceptTables);
-		if(tables == null || tables.isEmpty()) {
-			return "";
+	public void writeToFile(String fileName, String packageName, String content, boolean toSrcTest) {
+		if(enumCodeGenerator == null) {
+			enumCodeGenerator = new EnumCodeGenerator(this);
 		}
-
-		//Engine ve = Engine.create("Huxiao.coder");
-
-		Map<String, TableMeta> tablesWithColumnMetaMapping = makeStringTableMetaMap(dataSource, tables);
-
-		List<FieldRule> list = new ArrayList<>();
-		Iterator<Map.Entry<String, TableMeta>> it = tablesWithColumnMetaMapping.entrySet().iterator();
-		while(it.hasNext()) {
-			Map.Entry<String, TableMeta> entry = it.next();
-			String tableName = entry.getKey();
-			TableMeta tableMeta = entry.getValue();
-
-			/**
-			 * columnName: is_deleted, clazzName:String
-			 * columnName: parent_id, clazzName:Long
-			 * columnName: name, clazzName:String
-			 * columnName: password, clazzName:String
-			 * columnName: name_cn, clazzName:String
-			 * columnName: user_number, clazzName:String
-			 * columnName: is_admin, clazzName:String
-			 * columnName: ticket, clazzName:String
-			 * columnName: version, clazzName:Integer
-			 */
-			List<ColumnMeta> columnMetaList =  tableMeta.getColumnMetaList();
-			for(ColumnMeta meta : columnMetaList) {
-				String columnName = meta.getName();
-				String clazzName = meta.getOriginClass();
-				Integer displaySize = meta.getDisplaySize();
-
-				if(ignoreKeys.contains(columnName)) {
-					continue;
-				}
-
-				if(String.class.getName().equals(clazzName)
-						|| Date.class.getName().equals(clazzName)) {
-					makeAnyStringRule(list, tableName, columnName, displaySize);
-				}
-				else {
-					makeNumericRule(list, tableName, columnName, clazzName);
-				}
-			}
-		}
-
-		return generateDefaultYml(oldYmlPath, list);
-	}
-
-	public static Map<String, TableMeta> makeStringTableMetaMap(DataSource dataSource, List<String> tables) throws SQLException {
-		Map<String, TableMeta> tablesWithColumnMetaMapping = new ConcurrentHashMap<>();
-		//连接不能在循环里面，不然有可能占用很多的链接
-		Connection con = dataSource.getConnection();
-		for(String tableName : tables) {
-			List<ColumnMeta> columnsMetaList = TableMetaKit.getColumnsMeta(con, tableName);
-			if(columnsMetaList == null || columnsMetaList.isEmpty()) {
-				continue;
-			}
-
-			TableMeta oTableMeta = new TableMeta();
-			oTableMeta.setTableName(tableName);
-			oTableMeta.setColumnMetaList(columnsMetaList);
-
-			tablesWithColumnMetaMapping.put(tableName, oTableMeta);
-		}
-		return tablesWithColumnMetaMapping;
+		enumCodeGenerator.writeToFile(fileName, packageName, content, toSrcTest);
 	}
 
 	/**
-	 * TODO 数值型 displaySize 没有意义
-	 * int 可以理解为不带小数点的整数 包括正数和负数
-	 * 从 -2^31 【31次方】(-2,147,483,648) 到 2^31 - 1 (2,147,483,647) 的整型数据（所有数字）。存储大小为 4 个字节。
+	 * 将 hxValidator.js 发布到指定路径下，供前端远程加载使用。
+	 * @param filePath 目标目录路径
 	 *
-	 * smallint
-	 * 从 -2^15 (-32,768) 到 2^15 - 1 (32,767) 的整型数据。存储大小为 2 个字节。
+	 * <pre>{@code
+	 * ValidatorEngine.INSTANCE.publishHxValidatorJS("/path/to/webapp/js/");
+	 * // 生成文件：/path/to/webapp/js/hxValidator.js
+	 * }</pre>
+	 */
+	public void publishHxValidatorJS(String filePath) {
+		String path = Thread.currentThread().getContextClassLoader()
+				.getResource(Const.HX_VALIDATOR + "." + Const.FileType.js.name()).getPath();
+		try {
+			String content = new String(Files.readAllBytes(Paths.get(path)));
+			FileWriter.write(filePath, Const.HX_VALIDATOR, Const.FileType.js.name(), content);
+		} catch (IOException e) {
+			throw new IllegalStateException(e);
+		}
+	}
+
+	// ===================== 静态规则创建辅助方法 =====================
+
+	/**
+	 * 创建数值类型字段的规则（numeric 或 decimal）。
+	 * <p>根据 Java 类型自动选择 {@link NumericFieldRule} 或 {@link DecimalFieldRule}。</p>
 	 *
-	 * tinyint
-	 * 从 0 到 255 的整型数据。存储大小为 1 字节.
+	 * @param list       规则列表（追加到该列表）
+	 * @param tableName  表名
+	 * @param columnName 字段名
+	 * @param clazzName  Java 类型的全限定名，如 {@code "java.lang.Integer"}
 	 *
-	 * bigint
-	 * 从 -2^63 (-9223372036854775808) 到 2^63-1 (9223372036854775807) 的整型数据（所有数字）。存储大小为 8 个字节
-	 * @param list
-	 * @param tableName
-	 * @param columnName
-	 * @param clazzName
+	 * <pre>{@code
+	 * List<FieldRule> list = new ArrayList<>();
+	 * ValidatorEngine.makeNumericRule(list, "student", "age", "java.lang.Integer");
+	 * // → NumericFieldRule{fieldKey="student.age", type="numeric", numericMin=0, numericMax=Long.MAX_VALUE}
+	 *
+	 * ValidatorEngine.makeNumericRule(list, "product", "price", "java.math.BigDecimal");
+	 * // → DecimalFieldRule{fieldKey="product.price", type="decimal", decimalMin=0.00, decimalMax=Long.MAX_VALUE}
+	 *
+	 * ValidatorEngine.makeNumericRule(list, "product", "count", "java.lang.String");
+	 * // → 不匹配任何类型，不添加（String 会被当作字符串字段处理）
+	 * }</pre>
 	 */
 	public static void makeNumericRule(List<FieldRule> list, String tableName,
 									   String columnName, String clazzName) {
-		/**
-		 * 兼容雪花算法，需要使用long
-		 */
 		Long displaySize = Long.MAX_VALUE;
 
 		if(Integer.class.getName().equals(clazzName)
@@ -927,22 +1071,30 @@ public enum ValidatorEngine {
 	}
 
 	/**
-	 * 指定字符串类型的规则
+	 * 创建字符串类型字段的规则。
+	 * <p>默认使用 {@code "any_string"} 正则（匹配任意内容），长度范围从 1 到 {@code displaySize}。</p>
 	 *
-	 * mysql mariadb而言
-	 * 对于varchar类型的长度，"你好"和"nh"是一个概念，都是2
-	 * 对于varchar(2)这样的数据类型，不能插入’123’或者’你好吗’这样的字符串，
-	 * 但是可以插入’12’,’你好’这样的字符串，我们知道在utf8字符集下两个汉字占用6个字节的大小。
+	 * @param list        规则列表（追加到该列表）
+	 * @param tableName   表名
+	 * @param columnName  字段名
+	 * @param displaySize 数据库 varchar 长度；如果为 null 则默认为 128
 	 *
-	 * 对于int(2)这样的数据 类型，是可以插入数字123的，但是最大不能超过int存储范围的最大值
+	 * <pre>{@code
+	 * List<FieldRule> list = new ArrayList<>();
+	 * ValidatorEngine.makeAnyStringRule(list, "student", "name", 50);
+	 * // → StringRegexFieldRule{
+	 * //     fieldKey="student.name", type="string",
+	 * //     stringRegexKey="any_string", stringLengthMin=1, stringLengthMax=50
+	 * //   }
 	 *
-	 * Oracle：
-	 * 1.      Varchar2的字段，保存汉字量是长度/3， 即 varchar2 (30) 的字段，必能保存10个汉字。
-	 * 2.      nvarchar2的字段，保存汉字是1：1的，即 nvarchar2 (30) 的字段，必能保存30个汉字。
-	 * @param list
-	 * @param tableName
-	 * @param columnName
-	 * @param displaySize
+	 * ValidatorEngine.makeAnyStringRule(list, "student", "bio", null);
+	 * // → stringLengthMax=128（默认值）
+	 *
+	 * // 当 dbType = oracle 时：
+	 * ValidatorEngine.initDbType("oracle");
+	 * ValidatorEngine.makeAnyStringRule(list, "student", "name", 30);
+	 * // → 额外设置 stringCharset="utf8"
+	 * }</pre>
 	 */
 	public static void makeAnyStringRule(List<FieldRule> list, String tableName, String columnName, Integer displaySize) {
 		if(displaySize == null) {
@@ -964,59 +1116,245 @@ public enum ValidatorEngine {
 	}
 
 	/**
-	 * yml读取到java中的是Map结构是：
-	 * "student" -> Map
-	 *               |
-	 *              "id" -> Map
-	 *                       |
-	 *                      "type" -> "numeric"
-	 *                      "numeric_min" -> 1
-	 *                      ...
-	 * @param oldYmlPath
-	 * @param list
+	 * 从数据源中读取多张表的列元数据，构建 {@code tableName → TableMeta} 映射。
+	 * <p>复用同一个数据库连接（避免循环中频繁获取和释放连接）。</p>
+	 *
+	 * @param dataSource 数据源
+	 * @param tables     表名列表
+	 * @return 表名到 TableMeta 的映射
+	 * @throws SQLException 数据库操作异常
+	 *
+	 * <pre>{@code
+	 * List<String> tableNames = Arrays.asList("student", "order");
+	 * Map<String, TableMeta> tableMeta = ValidatorEngine.makeStringTableMetaMap(dataSource, tableNames);
+	 * // 返回：
+	 * // {
+	 * //   "student": TableMeta{
+	 * //     tableName="student",
+	 * //     columnMetaList=[
+	 * //       ColumnMeta{name="id", displaySize=11, originClass="java.lang.Integer"},
+	 * //       ColumnMeta{name="name", displaySize=50, originClass="java.lang.String"},
+	 * //       ColumnMeta{name="money", displaySize=12, originClass="java.math.BigDecimal"},
+	 * //     ]
+	 * //   },
+	 * //   "order": TableMeta{...}
+	 * // }
+	 * }</pre>
+	 */
+	public static Map<String, TableMeta> makeStringTableMetaMap(DataSource dataSource, List<String> tables) throws SQLException {
+		Map<String, TableMeta> tablesWithColumnMetaMapping = new ConcurrentHashMap<>();
+		Connection con = dataSource.getConnection();
+		try {
+			for(String tableName : tables) {
+				List<ColumnMeta> columnsMetaList = TableMetaKit.getColumnsMeta(con, tableName);
+				if(columnsMetaList == null || columnsMetaList.isEmpty()) {
+					continue;
+				}
+				TableMeta oTableMeta = new TableMeta();
+				oTableMeta.setTableName(tableName);
+				oTableMeta.setColumnMetaList(columnsMetaList);
+				tablesWithColumnMetaMapping.put(tableName, oTableMeta);
+			}
+		} finally {
+			try { con.close(); } catch (SQLException ignored) {}
+		}
+		return tablesWithColumnMetaMapping;
+	}
+
+	// ===================== YML 生成（从数据库表生成默认配置） =====================
+
+	/**
+	 * 从数据库读取表结构，生成默认的 value_rules.yml 配置字符串。
+	 * <p>字符串类型的字段 → {@link #makeAnyStringRule} <br>
+	 * 数值/布尔/大数类型的字段 → {@link #makeNumericRule}</p>
+	 *
+	 * @param oldYmlPath   旧的 value_rules.yml 路径（用于读取已有的手工配置，避免覆盖）
+	 * @param dataSource   数据源
+	 * @param databaseName 数据库名称
+	 * @param exceptTables 排除的表名列表（可为 null）
+	 * @return YAML 格式的配置字符串
+	 * @throws SQLException 数据库操作异常
+	 *
+	 * <pre>{@code
+	 * // 从数据库 student 表自动生成配置：
+	 * String yml = ValidatorEngine.INSTANCE.generateDefaultYml(
+	 *     "old_value_rules.yml", dataSource, "my_database", null);
+	 * // 输出示例：
+	 * // student:
+	 * //   id:
+	 * //     type: numeric
+	 * //     numeric_min: 0
+	 * //     numeric_max: 9223372036854775807
+	 * //   name:
+	 * //     type: string
+	 * //     string_regex_key: any_string
+	 * //     string_length_min: 1
+	 * //     string_length_max: 50
+	 * //   money:
+	 * //     type: decimal
+	 * //     decimal_min: 0.00
+	 * //     decimal_max: 9223372036854775807
+	 * }</pre>
+	 */
+	public String generateDefaultYml(String oldYmlPath, DataSource dataSource, String databaseName, List<String> exceptTables)
+			throws SQLException {
+		List<String> tables = TableMetaKit.getTables(dataSource, databaseName, exceptTables);
+		if(tables == null || tables.isEmpty()) {
+			return "";
+		}
+
+		Map<String, TableMeta> tablesWithColumnMetaMapping = makeStringTableMetaMap(dataSource, tables);
+
+		List<FieldRule> list = new ArrayList<>();
+		for (Map.Entry<String, TableMeta> entry : tablesWithColumnMetaMapping.entrySet()) {
+			String tableName = entry.getKey();
+			TableMeta tableMeta = entry.getValue();
+
+			for(ColumnMeta meta : tableMeta.getColumnMetaList()) {
+				String columnName = meta.getName();
+				String clazzName = meta.getOriginClass();
+				Integer displaySize = meta.getDisplaySize();
+
+				if(ignoreKeys.contains(columnName)) {
+					continue;
+				}
+
+				if(String.class.getName().equals(clazzName)
+						|| Date.class.getName().equals(clazzName)) {
+					makeAnyStringRule(list, tableName, columnName, displaySize);
+				}
+				else {
+					makeNumericRule(list, tableName, columnName, clazzName);
+				}
+			}
+		}
+
+		return generateDefaultYml(oldYmlPath, list);
+	}
+
+	// ===================== YML 合并生成 =====================
+
+	/**
+	 * 合并新旧 YAML 配置生成新的 YAML 配置字符串。
+	 * <p>已有旧配置的字段保留不变，新字段追加，表中已删除的字段自动清理。</p>
+	 *
+	 * @param oldYmlPath 旧的 YAML 配置文件路径
+	 * @param list       从数据库生成的新字段规则列表
+	 * @return 合并后的 YAML 配置字符串
+	 *
+	 * <pre>{@code
+	 * // 已有旧配置（value_rules_clean.yml）：
+	 * //   court: { id: { string_length_min: 2, string_length_max: 3, type: String } }
+	 * //
+	 * // 新生成规则列表：
+	 * //   [common.id (String, 1-128), court.id (String, 2-3)]
+	 * //
+	 * // 结果：
+	 * //   common:
+	 * //     id: { string_length_min: 1, string_length_max: 128, type: String }
+	 * //   court:
+	 * //     id: { string_length_min: 2, string_length_max: 3, type: String }
+	 * //     （保留旧配置 court.id）
+	 * }</pre>
 	 */
 	public String generateDefaultYml(String oldYmlPath, List<FieldRule> list) {
-		/**
-		 * 读取旧配置文件中的已有配置
-		 */
-		this.valueRulesMap = loadValueRulesYml(oldYmlPath);
-		Map<String, Map<String, Object>> oldConfigMap = this.valueRulesMap;
+		Map<String, Map<String, Object>> oldConfig = configLoader.loadValueRulesYml(oldYmlPath);
+		Map<String, Object> tableMap = buildMergedTableMap(oldConfig, list);
+		Yaml yaml = new Yaml();
+		return yaml.dumpAs(cleanCopyOfMap(tableMap), Tag.MAP, DumperOptions.FlowStyle.BLOCK);
+	}
 
-		/**
-		 * 根据的读取到的表的元数据
-		 */
+	/**
+	 * 将合并后的 tableMap 按表名拆分为独立 YAML 文件，写入指定目录。
+	 * <p>每个文件只包含一个表的数据，文件名为表名，如 {@code student.yml}、{@code order.yml}。</p>
+	 *
+	 * @param tableMap 合并后的完整规则 Map
+	 * @param rulesDir 输出目录（绝对路径）
+	 *
+	 * <pre>{@code
+	 * Map<String, Object> tableMap = new HashMap<>();
+	 * tableMap.put("student", fieldMap1);
+	 * tableMap.put("order", fieldMap2);
+	 *
+	 * ValidatorEngine.INSTANCE.generatePerTableYmlFiles(tableMap, "/path/to/resources/rules");
+	 * // 生成文件：
+	 * //   /path/to/resources/rules/student.yml
+	 * //   /path/to/resources/rules/order.yml
+	 *
+	 * // student.yml 内容示例：
+	 * // student:
+	 * //   id:
+	 * //     type: numeric
+	 * //     numeric_min: 1
+	 * //     numeric_max: 128
+	 * }</pre>
+	 */
+	public void generatePerTableYmlFiles(Map<String, Object> tableMap, String rulesDir) {
+		Yaml yaml = new Yaml();
+
+		// 生成前备份整个 rules 目录
+		File rulesDirFile = new File(rulesDir);
+		if(rulesDirFile.exists()) {
+			File backupDir = new File(rulesDir + "_" + System.currentTimeMillis());
+			rulesDirFile.renameTo(backupDir);
+		}
+
+		for (Map.Entry<String, Object> entry : tableMap.entrySet()) {
+			String tableName = entry.getKey();
+			Object fieldsVal = entry.getValue();
+
+			Map<String, Object> singleTableMap = new HashMap<>(1);
+			singleTableMap.put(tableName, fieldsVal);
+
+			String dumpStr = yaml.dumpAs(cleanCopyOfMap(singleTableMap), Tag.MAP, DumperOptions.FlowStyle.BLOCK);
+			FileWriter.write(rulesDir, tableName, "yml", dumpStr);
+		}
+	}
+
+	/**
+	 * 合并新旧配置，生成完整的 tableMap。
+	 * <p>旧配置中已存在的字段保持不动，新添加的字段追加进去，
+	 * 数据库中已不存在的字段从结果中移除。</p>
+	 *
+	 * @param oldConfig 旧的配置 Map（从 YAML 文件读取）
+	 * @param list      从数据库生成的新字段规则列表
+	 * @return 合并后的 tableMap，结构：{@code Map<tableName, Map<fieldName, ruleMap>>}
+	 *
+	 * <pre>{@code
+	 * // 旧配置：
+	 * //   student: { id: { type: numeric, numeric_min: 1, numeric_max: 128 } }
+	 * //
+	 * // 新规则列表：
+	 * //   [student.id (numeric, 1-128)], [student.name (string, 1-50)]
+	 * //
+	 * // 返回：
+	 * //   { student: { id: { type: numeric, ... }, name: { type: string, ... } } }
+	 * //   （student.id 保留旧配置，student.name 为新追加）
+	 * }</pre>
+	 */
+	public Map<String, Object> buildMergedTableMap(Map<String, Map<String, Object>> oldConfig, List<FieldRule> list) {
 		Map<String, Object> tableMap = new HashMap<>();
-		if(oldConfigMap != null) {
-			tableMap.putAll(oldConfigMap);
+		if(oldConfig != null) {
+			tableMap.putAll(oldConfig);
 		}
 
 		for(FieldRule rule : list) {
-			/**
-			 * 处理 _common.status, sfm_template_summary_list.status
-			 */
 			String[] keys = secureFieldKey(rule.getFieldKey());
-
 			String tableName = keys[0];
 			String fieldName = keys[1];
 
 			Map<String, Object> fieldMap;
-			if(oldConfigMap != null) {
-				fieldMap = oldConfigMap.get(tableName);
+			if(oldConfig != null) {
+				fieldMap = oldConfig.get(tableName);
 				if (fieldMap != null) {
 					Map<String, Object> rulesMap = (Map<String, Object>) fieldMap.get(fieldName);
 					if (rulesMap != null && rulesMap.size() > 0) {
 						System.out.println("fieldName exist: " + fieldName);
-						/**
-						 * 如果该字段已存在旧的配置，则使用旧的配置
-						 */
 						continue;
 					}
 				}
 			}
 
-			/**
-			 * 如果不存在旧的配置，则根据FieldRule新生成配置
-			 */
 			fieldMap = (Map<String, Object>) tableMap.get(tableName);
 			if(fieldMap == null) {
 				fieldMap = new HashMap<>();
@@ -1025,36 +1363,33 @@ public enum ValidatorEngine {
 
 			Map<String, Object> beanMap = BeanUtil.beanToMap(rule);
 			Map<String, Object> ruleMap = new HashMap<>();
-			Iterator<Map.Entry<String, Object>> it = beanMap.entrySet().iterator();
-			while (it.hasNext()) {
-				Map.Entry<String, Object> entry = it.next();
-				String key = entry.getKey();
-				Object val = entry.getValue();
-
+			for (Map.Entry<String, Object> e : beanMap.entrySet()) {
+				String key = e.getKey();
+				Object val = e.getValue();
 				if("fieldKey".equals(key)) {
 					continue;
 				}
 				ruleMap.put(NameUtil.humpToLine(key), val);
 			}
-
 			fieldMap.put(fieldName, ruleMap);
 		}
 
-		/**
-		 * 过滤掉在table中已经不存在的字段
-		 */
 		removeDeletedRule(tableMap, list);
-
-		Yaml yaml = new Yaml();
-		String dumpCleanStr = yaml.dumpAs(ValidatorEngine.cleanCopyOfMap(tableMap), Tag.MAP, DumperOptions.FlowStyle.BLOCK);
-		//System.out.println("dumpCleanStr:\n" + dumpCleanStr);
-		return dumpCleanStr;
+		return tableMap;
 	}
 
 	/**
-	 * 过滤掉在table中已经不存在的字段
-	 * @param tableMap
-	 * @param listFromTable
+	 * 移除 tableMap 中已在数据库中被删除的字段。
+	 * <p>对比 {@code listFromTable} 中的 fieldKey，如果 tableMap 中的字段不在其中，则移除。</p>
+	 *
+	 * @param tableMap      当前完整的 tableMap
+	 * @param listFromTable 从数据库读取到的当前字段列表
+	 *
+	 * <pre>{@code
+	 * // tableMap 包含：{ student: { id: {...}, name: {...}, old_field: {...} } }
+	 * // listFromTable 包含：student.id, student.name（old_field 已被删除）
+	 * // 执行后 tableMap = { student: { id: {...}, name: {...} } }
+	 * }</pre>
 	 */
 	private void removeDeletedRule(Map<String, Object> tableMap, List<FieldRule> listFromTable) {
 		Set<String> fieldIncludeUnused = new HashSet<>();
@@ -1066,9 +1401,7 @@ public enum ValidatorEngine {
 		});
 
 		Set<String> fieldForOutput = new HashSet<>();
-		listFromTable.forEach((rule) -> {
-			fieldForOutput.add(rule.getFieldKey());
-		});
+		listFromTable.forEach((rule) -> fieldForOutput.add(rule.getFieldKey()));
 
 		Set<String> fieldToBeFilter = new HashSet<>();
 		fieldIncludeUnused.forEach((fieldName) -> {
@@ -1079,7 +1412,6 @@ public enum ValidatorEngine {
 
 		fieldToBeFilter.forEach((fieldKey) -> {
 			String[] keys = secureFieldKey(fieldKey);
-
 			String tableName = keys[0];
 			String fieldName = keys[1];
 
@@ -1087,7 +1419,6 @@ public enum ValidatorEngine {
 			if(fieldMap.containsKey(fieldName)) {
 				fieldMap.remove(fieldName);
 			}
-
 			if(fieldMap.isEmpty()) {
 				tableMap.remove(tableName);
 			}
@@ -1095,73 +1426,23 @@ public enum ValidatorEngine {
 	}
 
 	/**
-	 * 格式化java代码
-	 * 如果格式化过程异常，则原样输出
-	 * @param valueRangeTemplate
-	 * @return
-	 */
-	public String formatJava(String valueRangeTemplate) {
-		if(formatter == null) {
-			/** 没有设置格式化插件就直接原样返回 */
-			return valueRangeTemplate;
-		}
-
-		try {
-			return formatter.formatJava(valueRangeTemplate);
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-
-		return valueRangeTemplate;
-	}
-
-	/**
-	 * 如果是使用此类的main方法 this.getClass().getClassLoader().getResource("").getPath()
-	 * ==>
-	 * /Volumes/HD-FOR-MAC/DEV_ENV/projects/webApp/workspace_for_maven/law-doc-
-	 * parent/law-doc-validator/target/classes/
-	 * 
-	 * this.getClass().getResource("").getPath() ==>
-	 * /Volumes/HD-FOR-MAC/DEV_ENV/projects/webApp/workspace_for_maven/law-doc-
-	 * parent/law-doc-validator/target/classes/com/baymax/law/doc/validator/
-	 * engine/
-	 */
-	public void writeToFile(String fileName, String packageName, String content, boolean toSrcTest) {
-		// /Volumes/HD-FOR-MAC/DEV_ENV/projects/webApp/workspace_for_maven/law-doc-parent/law-doc-validator/target/classes/
-		String targetClassesPath = this.getClass().getProtectionDomain().getCodeSource().getLocation().getPath();
-		String srcPath = toSrcTest ? targetClassesPath + "../../src/test/java"
-				: targetClassesPath + "../../src/main/java";
-
-		String packagePath = File.separator + packageName.replaceAll("\\.", File.separator);
-		//System.out.println(packagePath);
-
-		if(toSrcTest) {
-			FileWriter.write(srcPath + packagePath, fileName, Const.FileType.java.name(), content);
-		} else {
-			FileWriter.backupAndWrite(srcPath + packagePath, fileName, Const.FileType.java.name(), content);
-		}
-	}
-
-	/**
-	 * 将hxValidator.js发布到指定路径下，可方便远程加载
-	 * @param filePath
-	 */
-	public void publishHxValidatorJS(String filePath) {
-		//得到配置文件路径
-		String path = Thread.currentThread().getContextClassLoader()
-				.getResource(Const.HX_VALIDATOR + "." + Const.FileType.js.name()).getPath();
-		try {
-			String content = new String(Files.readAllBytes(Paths.get(path)));
-			FileWriter.write(filePath, Const.HX_VALIDATOR, Const.FileType.js.name(), content);
-		} catch (IOException e) {
-			throw new IllegalStateException(e);
-		}
-	}
-
-
-	/**
-	 * 去掉map中值为null的数据
-	 * @param map
+	 * 深度清理 Map 中所有值为 null 的条目（递归）。
+	 *
+	 * @param map 待清理的 Map
+	 * @return 清理后的 Map（与原 Map 为同一对象，不是副本）
+	 *
+	 * <pre>{@code
+	 * Map<String, Object> map = new HashMap<>();
+	 * map.put("a", 1);
+	 * map.put("b", null);
+	 * map.put("c", new HashMap() {{ put("d", null); put("e", 2); }});
+	 *
+	 * Map<String, Object> cleaned = ValidatorEngine.cleanCopyOfMap(map);
+	 *
+	 * // 结果：
+	 * // { "a": 1, "c": { "e": 2 } }
+	 * // b 和 c.d 因为值为 null 被移除
+	 * }</pre>
 	 */
 	public static Map<String, Object> cleanCopyOfMap(Map<String, Object> map) {
 		Map<String, Object> copyMap = new HashMap<>(map.size());
@@ -1170,22 +1451,17 @@ public enum ValidatorEngine {
 	}
 
 	/**
-	 * 递归清理map中的各项value为null的键值对
-	 * @param copyMap
-	 * @return
+	 * 递归清理 Map 中的 null 值条目。
+	 * @param copyMap 待清理的 Map（会直接修改此 Map）
+	 * @return 清理后的 Map
 	 */
 	private static Map<String, Object> deepCleanMap(Map<String, Object> copyMap) {
 		copyMap.entrySet().removeIf((entry) ->{
 			if(entry.getValue() instanceof Map) {
-				/**
-				 * 递归清理
-				 */
 				deepCleanMap((Map<String, Object>) entry.getValue());
 			}
 			return entry.getValue() == null;
 		});
 		return copyMap;
 	}
-
-
 }

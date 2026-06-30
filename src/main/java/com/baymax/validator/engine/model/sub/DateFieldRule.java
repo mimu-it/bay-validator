@@ -27,12 +27,12 @@ import java.util.TimeZone;
  * @apiNote
  */
 public class DateFieldRule extends FieldRule {
-    private static SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
-    static {
+    private static final ThreadLocal<SimpleDateFormat> dateFormatLocal = ThreadLocal.withInitial(() -> {
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
         /** yaml.loadAs 默认会把日期字符串转换为Date  会变成 08:00:00 */
-        dateFormat.setTimeZone(TimeZone.getTimeZone("UTC"));
-        //dateFormat.setTimeZone(TimeZone.getDefault());
-    }
+        sdf.setTimeZone(TimeZone.getTimeZone("UTC"));
+        return sdf;
+    });
 
     @Override
     public void build(String fieldKey, String type, Map<String, Object> rulesMap) {
@@ -58,7 +58,7 @@ public class DateFieldRule extends FieldRule {
             }
 
             try {
-                date = dateFormat.parse(valueStr);
+                date = dateFormatLocal.get().parse(valueStr);
             } catch (Exception e) {
                 return false;
             }
