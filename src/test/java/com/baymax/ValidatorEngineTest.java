@@ -6,13 +6,14 @@ import com.baymax.validator.engine.generator.formatter.IFormatter;
 import com.baymax.validator.engine.model.FieldRule;
 import com.baymax.validator.engine.model.sub.StringRegexFieldRule;
 import com.baymax.vo.Student;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.googlejavaformat.java.Formatter;
 import com.google.googlejavaformat.java.FormatterException;
-import com.jfinal.template.stat.ast.For;
 import org.junit.Assert;
 import org.junit.Test;
 import org.yaml.snakeyaml.Yaml;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -23,7 +24,9 @@ import java.util.HashSet;
 import java.util.List;
 
 public class ValidatorEngineTest {
-    private static ObjectMapper mapper = new ObjectMapper();
+    private static JsonMapper mapper = JsonMapper.builder()
+            .changeDefaultPropertyInclusion(incl -> incl.withValueInclusion(JsonInclude.Include.NON_NULL))
+            .build();
 
     public enum PAGE_BIG_INTEGER {
         NUMBER_0(new BigInteger("0")),
@@ -195,11 +198,18 @@ public class ValidatorEngineTest {
         ValidatorEngine.INSTANCE.init("value_rules.yml");
         String jsonStr = ValidatorEngine.INSTANCE.getFieldValidatorRulesJsonStr("student.game_long_card");
         System.out.println("testGetFieldValidatorRulesJsonStr => \n" + jsonStr);
-        Assert.assertEquals("{\"fieldKey\":\"\",\"type\":\"enum_numeric\",\"enumValues\":[3000000000,4000000000]}", jsonStr);
+
+        JsonNode actual = mapper.readTree(jsonStr);
+        JsonNode expected = mapper.readTree("{\"enumValues\":[3000000000,4000000000],\"fieldKey\":\"\",\"type\":\"enum_numeric\"}");
+        Assert.assertEquals(expected, actual);
+
 
         String jsonStr2 = ValidatorEngine.INSTANCE.getFieldValidatorRulesJsonStr("student.phone_number");
         System.out.println("testGetFieldValidatorRulesJsonStr => \n" + jsonStr2);
-        Assert.assertEquals(
+
+
+        JsonNode actual2 = mapper.readTree(jsonStr2);
+        JsonNode expected2 = mapper.readTree(
                 "{\"fieldKey\":\"\"," +
                         "\"type\":\"string\"," +
                         "\"stringCharset\":\"utf8\"," +
@@ -207,7 +217,9 @@ public class ValidatorEngineTest {
                         "\"stringLengthMin\":11," +
                         "\"stringLengthMax\":11," +
                         "\"regexStr\":\"^1[3|4|5|7|8][0-9]{9}$\"," +
-                        "\"lengthMode\":\"byte\"}", jsonStr2);
+                        "\"lengthMode\":\"byte\"}"
+        );
+        Assert.assertEquals(expected2, actual2);
     }
 
 

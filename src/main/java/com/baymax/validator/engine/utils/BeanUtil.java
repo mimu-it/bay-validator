@@ -1,7 +1,6 @@
 package com.baymax.validator.engine.utils;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.beans.BeanInfo;
 import java.beans.Introspector;
@@ -54,11 +53,10 @@ public class BeanUtil {
         return map;
     }
 
-    public static Map<String, Object> beanToMap(Object obj) {
+    public static Map<String, Object> beanToMap(JsonMapper mapper, Object obj) {
         try {
-            ObjectMapper mapper = new ObjectMapper();
             return mapper.readValue(mapper.writeValueAsString(obj), Map.class);
-        } catch (JsonProcessingException e) {
+        } catch (Exception e) {
             throw new IllegalStateException(e);
         }
     }

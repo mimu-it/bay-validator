@@ -3,7 +3,7 @@ package com.baymax.pvg2.values;
 import java.io.Serializable;
 import java.math.BigDecimal;
 
-/** @author xiao.hu create time:2026-07-13 10:49:10 */
+/** @author xiao.hu create time:2026-07-13 13:57:40 */
 public final class ValueEnumRange implements Serializable {
 
   public static final class student {

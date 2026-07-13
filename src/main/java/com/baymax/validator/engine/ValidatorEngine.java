@@ -15,12 +15,11 @@ import com.baymax.validator.engine.utils.BeanUtil;
 import com.baymax.validator.engine.utils.FileWriter;
 import com.baymax.validator.engine.utils.NameUtil;
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.commons.lang3.StringUtils;
 import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.nodes.Tag;
+import tools.jackson.databind.json.JsonMapper;
 
 import javax.sql.DataSource;
 import java.beans.BeanInfo;
@@ -110,8 +109,9 @@ public enum ValidatorEngine {
     private final YamlConfigLoader configLoader = new YamlConfigLoader();
     private EnumCodeGenerator enumCodeGenerator;
 
-    private static ObjectMapper mapper = new ObjectMapper();
-
+    private static JsonMapper mapper = JsonMapper.builder()
+                .changeDefaultPropertyInclusion(incl -> incl.withValueInclusion(JsonInclude.Include.NON_NULL))
+                .build();
 
 
     /**
@@ -674,7 +674,7 @@ public enum ValidatorEngine {
     public String getFieldValidatorRulesStr(String fieldKey) {
         try {
             return mapper.writeValueAsString(this.getFieldValidatorRules(fieldKey));
-        } catch (JsonProcessingException e) {
+        } catch (Exception e) {
             logger.log(Level.WARNING, "Failed to serialize field rules for " + fieldKey, e);
         }
         return null;
@@ -714,7 +714,6 @@ public enum ValidatorEngine {
         fieldRule.setFieldKey("");
 
         try {
-            mapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
             String jsonStr = mapper.writeValueAsString(fieldRule);
 
             if (!RuleType.string.name().equals(fieldRule.getType())) {
@@ -739,7 +738,7 @@ public enum ValidatorEngine {
             String charset = fieldRule.getStringCharset();
             m.put("lengthMode", org.apache.commons.lang3.StringUtils.isBlank(charset) ? "char" : "byte");
             return m;
-        } catch (JsonProcessingException e) {
+        } catch (Exception e) {
             logger.log(Level.WARNING, "Failed to build field rule JSON for " + fieldKey, e);
         }
         return null;
@@ -758,7 +757,7 @@ public enum ValidatorEngine {
     public String getFieldValidatorRulesJsonStr(String fieldKey) {
         try {
             return mapper.writeValueAsString(this.getFieldValidatorRulesJson(fieldKey));
-        } catch (JsonProcessingException e) {
+        } catch (Exception e) {
             logger.log(Level.WARNING, "Failed to serialize field rule JSON for " + fieldKey, e);
         }
         return null;
@@ -1406,7 +1405,7 @@ public enum ValidatorEngine {
                 tableMap.put(tableName, fieldMap);
             }
 
-            Map<String, Object> newRuleBeanMap = BeanUtil.beanToMap(newRule);
+            Map<String, Object> newRuleBeanMap = BeanUtil.beanToMap(mapper, newRule);
             logger.info("newRuleBeanMap:" + newRuleBeanMap);
 
             Map<String, Object> ruleMap = new HashMap<>();

@@ -7,11 +7,13 @@ import com.baymax.validator.engine.constant.Const;
 import com.baymax.validator.engine.model.FieldRule;
 import com.baymax.validator.engine.model.sub.StringRegexFieldRule;
 import com.baymax.validator.engine.utils.BeanUtil;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import org.junit.Assert;
 import org.junit.Test;
 import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.nodes.Tag;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -24,6 +26,11 @@ import java.util.Scanner;
  */
 public class AppTest 
 {
+
+    private static JsonMapper mapper = JsonMapper.builder()
+            .changeDefaultPropertyInclusion(incl -> incl.withValueInclusion(JsonInclude.Include.NON_NULL))
+            .build();
+
     /**
      * Rigorous Test :-)
      */
@@ -55,12 +62,11 @@ public class AppTest
         System.out.println(map);
         Assert.assertEquals("{}", map.toString());
 
-        map = BeanUtil.beanToMap(rule);
+
+        map = BeanUtil.beanToMap(mapper, rule);
         System.out.println(map);
-        Assert.assertEquals("{dbType=null, fieldKey=common.id, type=String, " +
-                "numericMin=null, numericMax=null, decimalMin=null, decimalMax=null, " +
-                "stringCharset=utf8, stringRegexKey=null, stringLengthMin=1, " +
-                "stringLengthMax=128, beginAt=null, endAt=null, enumValues=null, enumDict=null}", map.toString());
+        Assert.assertEquals("{fieldKey=common.id, stringCharset=utf8, " +
+                "stringLengthMax=128, stringLengthMin=1, type=String}", map.toString());
     }
 
     /**
