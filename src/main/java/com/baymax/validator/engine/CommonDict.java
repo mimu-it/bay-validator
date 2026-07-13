@@ -33,7 +33,7 @@ public enum CommonDict {
         regexDictYmlFilePath = StrUtil.isBlank(regexDictYmlFilePath) ?
                 Const.COMMON_DICT_FILENAME : regexDictYmlFilePath;
 
-        dict = configLoader.loadRuleDictYml(regexDictYmlFilePath);
+        dict = configLoader.loadCommonRuleDictYml(regexDictYmlFilePath);
         if(dict == null) {
             throw new IllegalStateException("load " + Const.COMMON_DICT_FILENAME + " failed");
         }

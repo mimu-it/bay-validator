@@ -1,6 +1,3 @@
-/**
- * 
- */
 package com.baymax.validator.engine.model;
 
 import java.math.BigDecimal;

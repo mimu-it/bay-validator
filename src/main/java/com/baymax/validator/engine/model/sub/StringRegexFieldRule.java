@@ -1,9 +1,7 @@
 package com.baymax.validator.engine.model.sub;
 
 import com.baymax.validator.engine.CommonDict;
-import com.baymax.validator.engine.ValidatorEngine;
 import com.baymax.validator.engine.model.FieldRule;
-import com.baymax.validator.engine.preset.DbType;
 import com.baymax.validator.engine.preset.RuleKey;
 import com.baymax.validator.engine.utils.StrUtil;
 import org.apache.commons.lang3.StringUtils;

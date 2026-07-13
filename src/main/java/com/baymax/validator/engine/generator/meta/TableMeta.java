@@ -1,6 +1,3 @@
-/**
- * 
- */
 package com.baymax.validator.engine.generator.meta;
 
 import java.util.List;

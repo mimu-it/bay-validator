@@ -9,6 +9,8 @@ import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.file.Paths;
+import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -16,9 +18,11 @@ import java.util.regex.Pattern;
  *
  */
 public class FileWriter {
+    private static final Logger logger = Logger.getLogger(FileWriter.class.getName());
+
     private static Pattern p = Pattern.compile("\\s+");
 
-    private static void mkdirsIfNecessary(String path) {
+    private static void mkdirIfNecessary(String path) {
         if (!new File(path).exists()) {
             try {
                 new File(path).mkdirs();
@@ -40,7 +44,7 @@ public class FileWriter {
     }
 
     private static String getFileUri(String path, String fileName, String fileType) {
-        return path + File.separator + fileName + "." + fileType;
+        return Paths.get(path,fileName + "." + fileType).toString();
     }
 
     /**
@@ -52,10 +56,10 @@ public class FileWriter {
      */
     public static void write(String path, String fileName, String fileType, String content) {
         String fileUri = getFileUri(path, fileName, fileType);
-        System.out.println("XmlOutputDir is :" + fileUri);
+        logger.info("XmlOutputDir is: " + fileUri);
 
         //if(true) return;
-        mkdirsIfNecessary(path);
+        mkdirIfNecessary(path);
         createFileIfNecessary(fileUri);
 
         BufferedOutputStream out = null;

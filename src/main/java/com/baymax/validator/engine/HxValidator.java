@@ -202,7 +202,6 @@ public class HxValidator {
      * 用于生成代码
      */
     public static class Generator {
-        private String dbType;
         private DataSource dataSource;
         private String databaseName;
         private List<String> exceptTables;
@@ -217,13 +216,12 @@ public class HxValidator {
             return new Generator();
         }
 
-        public Generator bindToDatabase(String dbType, DataSource dataSource, String databaseName) {
-            this.bindToDatabase(dbType, dataSource, databaseName, null);
+        public Generator bindToDatabase(DataSource dataSource, String databaseName) {
+            this.bindToDatabase(dataSource, databaseName, null);
             return this;
         }
 
-        public Generator bindToDatabase(String dbType, DataSource dataSource, String databaseName, List<String> exceptTables) {
-            this.dbType = dbType;
+        public Generator bindToDatabase(DataSource dataSource, String databaseName, List<String> exceptTables) {
             this.dataSource = dataSource;
             this.databaseName = databaseName;
             this.exceptTables = exceptTables;
@@ -256,7 +254,7 @@ public class HxValidator {
         }
 
         public void generate() throws SQLException {
-            ValidatorCodeGenerator.generateValidatorConfig(dbType,
+            ValidatorCodeGenerator.generateValidatorConfig(
                     dataSource, databaseName, exceptTables,
                     valueRuleModuleTargetPath,
                     valueEnumRangeModuleTargetPath,

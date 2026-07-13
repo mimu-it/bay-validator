@@ -3,8 +3,6 @@ package com.baymax.validator.engine.generator;
 import com.baymax.validator.engine.constant.Const;
 import com.baymax.validator.engine.preset.RuleType;
 import com.baymax.validator.engine.utils.StrUtil;
-import com.google.googlejavaformat.java.Formatter;
-import com.google.googlejavaformat.java.FormatterException;
 import com.jfinal.kit.Kv;
 import com.jfinal.template.Engine;
 
@@ -17,7 +15,6 @@ import java.util.Map;
  * @author xiao.hu
  */
 public class JavaEnumTemplateRender {
-    private static Engine engine = Engine.use();
 
     /**
      * 根据type类型构造je，方便代码生成时的对象使用
@@ -26,14 +23,14 @@ public class JavaEnumTemplateRender {
      * @param enumValues
      * @return
      */
-    public static JavaEnum build(String fieldName, String type, List enumValues, Map enumDict) {
+    public static JavaEnum build(Engine engine, String fieldName, String type, List enumValues, Map enumDict) {
         JavaEnum je = new JavaEnum();
         je.setFieldName(fieldName);
 
         if(RuleType.enum_numeric.name().equals(type)) {
             je.setJavaType(BigInteger.class.getSimpleName());
             je.setCanonicalJavaType(BigInteger.class.getCanonicalName());
-            je.setEnumValues(buildEnumValuesStr(enumValues, Const.JavaType.NUMBER.name(), je.getJavaType(), enumDict));
+            je.setEnumValues(buildEnumValuesStr(engine, enumValues, Const.JavaType.NUMBER.name(), je.getJavaType(), enumDict));
         }
         else if(RuleType.enum_decimal.name().equals(type)) {
             /**
@@ -42,12 +39,12 @@ public class JavaEnumTemplateRender {
              */
             je.setJavaType(BigDecimal.class.getSimpleName());
             je.setCanonicalJavaType(BigDecimal.class.getCanonicalName());
-            je.setEnumValues(buildEnumValuesStr(enumValues, Const.JavaType.NUMBER.name(), je.getJavaType(), enumDict));
+            je.setEnumValues(buildEnumValuesStr(engine, enumValues, Const.JavaType.NUMBER.name(), je.getJavaType(), enumDict));
         }
         else {
             je.setJavaType(String.class.getSimpleName());
             je.setCanonicalJavaType(String.class.getCanonicalName());
-            je.setEnumValues(buildEnumValuesStr(enumValues, Const.JavaType.STRING.name(), je.getJavaType(), enumDict));
+            je.setEnumValues(buildEnumValuesStr(engine, enumValues, Const.JavaType.STRING.name(), je.getJavaType(), enumDict));
         }
 
         return je;
@@ -60,7 +57,7 @@ public class JavaEnumTemplateRender {
      * @param javaType
      * @return
      */
-    private static String buildEnumValuesStr(List<Object> enumValues, String prefix, String javaType,
+    private static String buildEnumValuesStr(Engine engine, List<Object> enumValues, String prefix, String javaType,
                                              Map<Object, String> dict) {
         StringBuilder sb = new StringBuilder();
         for (Object val : enumValues) {

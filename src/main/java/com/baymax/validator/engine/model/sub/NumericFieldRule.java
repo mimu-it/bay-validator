@@ -1,6 +1,5 @@
 package com.baymax.validator.engine.model.sub;
 
-import com.baymax.validator.engine.ValidatorEngine;
 import com.baymax.validator.engine.model.FieldRule;
 import com.baymax.validator.engine.preset.RuleKey;
 import com.baymax.validator.engine.utils.ParamUtil;

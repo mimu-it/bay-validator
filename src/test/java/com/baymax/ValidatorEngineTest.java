@@ -476,7 +476,7 @@ public class ValidatorEngineTest {
                     add("creator");
                     add("created_at");
                     add("updated_at");
-                }}, true);
+                }}, true, false, 0);
 
         Student student = new Student();
         student.setId(1);

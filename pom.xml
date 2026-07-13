@@ -9,43 +9,42 @@
     <version>1.8-SNAPSHOT</version>
 
     <name>bay-validator</name>
-    <!-- FIXME change it to the project's website -->
-    <url>http://www.example.com</url>
 
     <!-- pom.xml中的maven.compiler.source和maven.compiler.是用来编译源码和打包的，通常它们的版本等于系统JDK的大版本，如11，9，8...； -->
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>8</maven.compiler.source>
         <maven.compiler.target>8</maven.compiler.target>
+        <jackson.version>2.18.0</jackson.version>
     </properties>
 
     <dependencies>
         <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
-            <version>4.11</version>
+            <version>4.13.1</version>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.commons</groupId>
             <artifactId>commons-lang3</artifactId>
-            <version>3.9</version>
+            <version>3.18.0</version>
         </dependency>
         <!-- json支持 -->
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-core</artifactId>
-            <version>2.11.0</version>
+            <version>${jackson.version}</version>
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
-            <version>2.11.0</version>
+            <version>${jackson.version}</version>
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-annotations</artifactId>
-            <version>2.11.0</version>
+            <version>${jackson.version}</version>
         </dependency>
         <!-- enjoy模板引擎支持 -->
         <dependency>
@@ -54,14 +53,14 @@
             <version>4.9.10</version>
         </dependency>
         <dependency>
-            <groupId>dom4j</groupId>
+            <groupId>org.dom4j</groupId>
             <artifactId>dom4j</artifactId>
-            <version>1.6.1</version>
+            <version>2.1.4</version>
         </dependency>
         <dependency>
             <groupId>org.yaml</groupId>
             <artifactId>snakeyaml</artifactId>
-            <version>1.27</version>
+            <version>2.0</version>
         </dependency>
         <dependency>
             <groupId>com.google.googlejavaformat</groupId>
@@ -71,6 +70,26 @@
     </dependencies>
 
     <build>
+        <!-- 测试资源 -->
+        <testResources>
+            <testResource>
+                <directory>src/test/resources</directory>
+                <includes>
+                    <include>**/*.enjoy</include>
+                    <include>**/*.yml</include>
+                </includes>
+            </testResource>
+
+            <!-- 2. 包含主代码目录下的资源 -->
+            <testResource>
+                <directory>src/main/resources</directory>
+                <!-- 根据需要，也可以在这里添加 includes 过滤 -->
+                <includes>
+                    <include>**/*.enjoy</include>
+                </includes>
+            </testResource>
+        </testResources>
+
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
