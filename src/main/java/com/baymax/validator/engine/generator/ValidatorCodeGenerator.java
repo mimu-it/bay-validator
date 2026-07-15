@@ -29,10 +29,13 @@ public class ValidatorCodeGenerator {
     /**
      * 生成字段校验相关的java类，此类用于数据校验，根据此类可以得到对应的属性，可以以json的形式反馈到前端
      * 用于前端js校验
+     *
+     * valueRuleModulePath 和 valueEnumRangeModulePath 都可以是
+     * String moduleTargetPath = System.getProperty("user.dir") + "/spry-validator";
      */
     public static void generateValidatorConfig(DataSource dataSource, String databaseName, List<String> exceptTables,
-                                               String valueRuleModuleTargetPath,
-                                               String valueEnumRangeModuleTargetPath,
+                                               String valueRuleModulePath,
+                                               String valueEnumRangeModulePath,
                                                String packageName,
                                                Set<String> userIgnoreKeys, boolean customUseSnake,
                                                String valueRulesDirectory) throws SQLException {
@@ -108,7 +111,7 @@ public class ValidatorCodeGenerator {
         // 7. 构建目标资源路径
         // 示例：valueRuleModuleTargetPath = "/project/validator-module"
         // 结果：srcResourcesPath = "/project/validator-module/src/main/resources/validator/rules/"
-        Path srcResourcesPath = Paths.get(valueRuleModuleTargetPath, "..", "..", "src", "main", "resources", valueRulesYmlDirectory);
+        Path srcResourcesPath = Paths.get(valueRuleModulePath, "src", "main", "resources", valueRulesYmlDirectory);
 
         // 构建合并的 tableMap（保留旧配置，合并新配置，删除已废弃字段）
         Map<String, Object> mergedTableMap = ValidatorEngine.INSTANCE.buildMergedTableMap(oldConfig, list);
@@ -123,12 +126,14 @@ public class ValidatorCodeGenerator {
                 userIgnoreKeys, customUseSnake);
 
         String sourceFormat = ValidatorEngine.INSTANCE.generateJavaEnumCode(packageName);
+        if(StrUtil.isNotBlank(sourceFormat)) {
+            // 有可能没有枚举内容
+            Path srcJavaPath = Paths.get(valueEnumRangeModulePath, "src", "main", "java");
+            String packagePath = packageName.replaceAll("\\.", File.separator);
+            Path valueEnumRangePath = Paths.get(srcJavaPath.toString(), packagePath);
 
-        Path srcJavaPath = Paths.get(valueEnumRangeModuleTargetPath, "..", "..", "src", "main", "java");
-        String packagePath = packageName.replaceAll("\\.", File.separator);
-        Path valueEnumRangePath = Paths.get(srcJavaPath.toString(), packagePath);
-
-        FileWriter.write(valueEnumRangePath.toString(), "ValueEnumRange", "java", sourceFormat);
+            FileWriter.write(valueEnumRangePath.toString(), "ValueEnumRange", "java", sourceFormat);
+        }
     }
 
     private static Map<String, TableMeta> buildTableMetaMap(DataSource dataSource, List<String> tables) throws SQLException {

@@ -487,6 +487,7 @@ spring:
 import com.baymax.validator.engine.HxValidator;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+
 import javax.sql.DataSource;
 
 @Component
@@ -508,13 +509,13 @@ public class RuleGenerator {
                          String packageName, String moduleTargetPath) {
         HxValidator.Generator.create()
                 .bindToDatabase("mysql", dataSource, databaseName, exceptTables)
-                .valueRuleModuleTargetPath(
-                    moduleTargetPath + "/target/classes", "rules")
-                .valueEnumRangeModuleTargetPath(
-                    moduleTargetPath + "/target/classes", packageName)
+                .valueRuleModulePath(
+                        moduleTargetPath + "/target/classes", "rules")
+                .valueEnumRangeModulePath(
+                        moduleTargetPath + "/target/classes", packageName)
                 .userIgnoreKeys(new HashSet<>(Arrays.asList(
-                    "id", "version", "is_deleted",
-                    "gmt_created", "gmt_modified")), true)
+                        "id", "version", "is_deleted",
+                        "gmt_created", "gmt_modified")), true)
                 .generate();
     }
 }

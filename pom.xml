@@ -85,6 +85,7 @@
             </testResource>
         </testResources>
 
+        <!-- 1. 编译配置 -->
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -93,6 +94,33 @@
                     <source>21</source>
                     <target>21</target>
                 </configuration>
+            </plugin>
+
+
+            <!-- 打 Fat JAR（包含所有依赖） -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.5.0</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <!-- 如果你有 main 方法，取消注释并修改类名 -->
+                            <!--
+                            <transformers>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <mainClass>com.baymax.generator.ValidatorRuleGenerator</mainClass>
+                                </transformer>
+                            </transformers>
+                            -->
+                            <createDependencyReducedPom>false</createDependencyReducedPom>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>

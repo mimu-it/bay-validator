@@ -79,7 +79,7 @@ public class ValidatorEngineTest {
         Assert.assertEquals("4000000000$123456", "4000000000.123456".replaceAll("\\.", "\\$"));
 
         double x = 4000000000.123456;
-        Double xx = new Double(x);
+        Double xx = Double.valueOf(x);
         BigDecimal xxBigDecimal = new BigDecimal(xx);
         System.out.println(xxBigDecimal.toString()); //4000000000.12345600128173828125 精度异常
         Assert.assertEquals("4.000000000123456E9", String.valueOf(xx));

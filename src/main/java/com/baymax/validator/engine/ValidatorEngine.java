@@ -442,7 +442,7 @@ public enum ValidatorEngine {
      *
      * @param dbType               数据库类型名称
      * @param valueRulesDir        主规则目录（相对于 classpath）
-     * @param commonValueRulesDir  通用规则目录（可为 null）
+     * @param commonValueRulesPath  通用规则目录（可为 null）
      * @param regexDictYmlFilePath common_dict 路径
      * @param userIgnoreKeys       自定义忽略字段集合
      * @param customUseSnake       {@code true}=下划线命名模式
@@ -452,7 +452,7 @@ public enum ValidatorEngine {
      *                                 "common_dict.yml", ignoreKeys, true);
      *                             }</pre>
      */
-    public void initFromDir(String dbType, String valueRulesDir, String commonValueRulesDir,
+    public void initFromDir(String dbType, String valueRulesDir, String commonValueRulesPath,
                             String regexDictYmlFilePath,
                             Set<String> userIgnoreKeys, boolean customUseSnake) {
         this.isSnakeKeyMode = customUseSnake;
@@ -463,8 +463,8 @@ public enum ValidatorEngine {
         CommonDict.INSTANCE.init(regexDictYmlFilePath);
         this.valueRulesMap = configLoader.loadValueRulesYmlFromDir(valueRulesDir);
 
-        if (commonValueRulesDir != null) {
-            this.commonValueRulesMap = configLoader.loadValueRulesYmlFromDir(commonValueRulesDir);
+        if (commonValueRulesPath != null) {
+            this.commonValueRulesMap = configLoader.loadValueRulesYml(commonValueRulesPath);
         }
     }
 
@@ -561,7 +561,7 @@ public enum ValidatorEngine {
      */
     private String[] secureFieldKey(String fieldKey) {
         if (fieldKey == null) {
-            throw new IllegalArgumentException("fieldKey is illegal");
+            throw new IllegalArgumentException("fieldKey is illegal, fieldKey is null");
         }
         String[] keys = fieldKey.split("\\.");
         if (keys.length != 2) {

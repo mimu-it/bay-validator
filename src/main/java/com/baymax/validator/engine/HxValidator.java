@@ -87,7 +87,12 @@ public class HxValidator {
             }
 
             if(useRulesDir) {
-                ValidatorEngine.INSTANCE.initFromDir(this.valueRulesYmlFilePath, this.ruleDictYmlFilePath);
+                ValidatorEngine.INSTANCE.initFromDir(this.dbType.name(),
+                        this.valueRulesYmlFilePath,
+                        this.commonValueRulesYmlFilePath,
+                        this.ruleDictYmlFilePath,
+                        this.userIgnoreKeys,
+                        this.keyMode == KeyMode.snake);
             } else {
                 ValidatorEngine.INSTANCE.init(this.dbType.name(),
                         this.valueRulesYmlFilePath,
@@ -205,8 +210,8 @@ public class HxValidator {
         private DataSource dataSource;
         private String databaseName;
         private List<String> exceptTables;
-        private String valueRuleModuleTargetPath;
-        private String valueEnumRangeModuleTargetPath;
+        private String valueRuleModulePath;
+        private String valueEnumRangeModulePath;
         private String packageName;
         private Set<String> userIgnoreKeys;
         private Boolean customUseSnake;
@@ -228,14 +233,14 @@ public class HxValidator {
             return this;
         }
 
-        public Generator valueRuleModuleTargetPath(String valueRuleModuleTargetPath, String valueRulesDirectory) {
-            this.valueRuleModuleTargetPath = valueRuleModuleTargetPath;
+        public Generator valueRuleModulePath(String valueRuleModulePath, String valueRulesDirectory) {
+            this.valueRuleModulePath = valueRuleModulePath;
             this.valueRulesDirectory = valueRulesDirectory;
             return this;
         }
 
-        public Generator valueEnumRangeModuleTargetPath(String valueEnumRangeModuleTargetPath, String packageName) {
-            this.valueEnumRangeModuleTargetPath = valueEnumRangeModuleTargetPath;
+        public Generator valueEnumRangeModulePath(String valueEnumRangeModulePath, String packageName) {
+            this.valueEnumRangeModulePath = valueEnumRangeModulePath;
             this.packageName = packageName;
             return this;
         }
@@ -256,8 +261,8 @@ public class HxValidator {
         public void generate() throws SQLException {
             ValidatorCodeGenerator.generateValidatorConfig(
                     dataSource, databaseName, exceptTables,
-                    valueRuleModuleTargetPath,
-                    valueEnumRangeModuleTargetPath,
+                    valueRuleModulePath,
+                    valueEnumRangeModulePath,
                     packageName, userIgnoreKeys,
                     customUseSnake, valueRulesDirectory);
         }
