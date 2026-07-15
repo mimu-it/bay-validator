@@ -18,6 +18,7 @@ import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.logging.Logger;
 
 /**
  * @author xiao.hu
@@ -25,6 +26,7 @@ import java.util.*;
  * @apiNote
  */
 public class ValidatorCodeGenerator {
+    private static final Logger logger = Logger.getLogger(ValidatorCodeGenerator.class.getName());
 
     /**
      * 生成字段校验相关的java类，此类用于数据校验，根据此类可以得到对应的属性，可以以json的形式反馈到前端
@@ -39,6 +41,7 @@ public class ValidatorCodeGenerator {
                                                String packageName,
                                                Set<String> userIgnoreKeys, boolean customUseSnake,
                                                String valueRulesDirectory) throws SQLException {
+        ValidatorEngine.INSTANCE.setUserIgnoreKeys(userIgnoreKeys);
         // 1. 获取校验规则 YAML 文件的存放目录
         // 示例：valueRulesDirectory = "validator/rules"
         // 返回：valueRulesYmlDirectory = "validator/rules/"
@@ -88,6 +91,7 @@ public class ValidatorCodeGenerator {
 
                 // 忽略用户指定或系统默认的字段（如：id, version, deleted 等）
                 if(ValidatorEngine.containIgnoreKeys(columnName)) {
+                    logger.info("ignore column: " + columnName);
                     continue;
                 }
 
@@ -123,7 +127,7 @@ public class ValidatorCodeGenerator {
         // 初始化引擎，生成枚举代码
         ValidatorEngine.INSTANCE.initFromDir(
                 rulesDirPath, regexDictYmlFilePath, null, regexDictYmlFilePath,
-                userIgnoreKeys, customUseSnake);
+                null, customUseSnake);
 
         String sourceFormat = ValidatorEngine.INSTANCE.generateJavaEnumCode(packageName);
         if(StrUtil.isNotBlank(sourceFormat)) {

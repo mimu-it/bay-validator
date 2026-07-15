@@ -376,8 +376,7 @@ public enum ValidatorEngine {
                      String regexDictYmlFilePath,
                      Set<String> userIgnoreKeys, boolean customUseSnake) {
         this.isSnakeKeyMode = customUseSnake;
-        ignoreKeys = userIgnoreKeys;
-        checkIgnoreKeysForLegality();
+        setUserIgnoreKeys(userIgnoreKeys);
         init(dbType, valueRulesYmlFilePath, commonValueRulesYmlFilePath, regexDictYmlFilePath);
     }
 
@@ -398,8 +397,7 @@ public enum ValidatorEngine {
     public void init(String dbType, String valueRulesYmlFilePath, String regexDictYmlFilePath,
                      Set<String> userIgnoreKeys, boolean customUseSnake, boolean lruCacheOpen, int lruCacheSize) {
         this.isSnakeKeyMode = customUseSnake;
-        ignoreKeys = userIgnoreKeys;
-        checkIgnoreKeysForLegality();
+        setUserIgnoreKeys(userIgnoreKeys);
         init0(dbType, valueRulesYmlFilePath, regexDictYmlFilePath);
     }
 
@@ -456,8 +454,7 @@ public enum ValidatorEngine {
                             String regexDictYmlFilePath,
                             Set<String> userIgnoreKeys, boolean customUseSnake) {
         this.isSnakeKeyMode = customUseSnake;
-        ignoreKeys = userIgnoreKeys;
-        checkIgnoreKeysForLegality();
+        setUserIgnoreKeys(userIgnoreKeys);
 
         initDbType(dbType);
         CommonDict.INSTANCE.init(regexDictYmlFilePath);
@@ -469,6 +466,17 @@ public enum ValidatorEngine {
     }
 
     /**
+     * 设置自定义需要忽略
+     * @param userIgnoreKeys
+     */
+    public void setUserIgnoreKeys(Set<String> userIgnoreKeys) {
+        if(userIgnoreKeys != null) {
+            ignoreKeys = userIgnoreKeys;
+            checkIgnoreKeysForLegality();
+        }
+    }
+
+    /**
      * 校验自定义忽略字段的合法性。<br>
      * 当下划线模式时，字段名不能包含大写字母；当驼峰模式时，字段名不能包含下划线。
      *
@@ -476,15 +484,14 @@ public enum ValidatorEngine {
      */
     private void checkIgnoreKeysForLegality() {
         for (String key : ignoreKeys) {
+            char[] chars = key.toCharArray();
             if (this.isSnakeKeyMode) {
-                char[] chars = key.toCharArray();
                 for (char s : chars) {
                     if (Character.isUpperCase(s)) {
                         throw new IllegalArgumentException("ignore keys must be snake naming mode");
                     }
                 }
             } else {
-                char[] chars = key.toCharArray();
                 for (char s : chars) {
                     if (s == '_') {
                         throw new IllegalArgumentException("ignore keys must be camel naming mode");
