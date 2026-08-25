@@ -29,6 +29,17 @@
 </dependency>
 ```
 
+
+```
+mvn install:install-file \
+                  -Dfile=bay-validator-2.0.jar \
+                  -DgroupId=com.baymax \
+                  -DartifactId=bay-validator \
+                  -Dversion=2.0 \
+                  -Dpackaging=jar
+```
+
+
 #### 方式二：本地 jar 包
 
 如果项目不方便使用 Maven 仓库，也可以直接用编译好的 jar 包：

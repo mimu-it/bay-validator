@@ -1,13 +1,12 @@
 package com.baymax.rule;
 
-import com.baymax.validator.engine.DataBaseType;
 import com.baymax.validator.engine.HxValidator;
 import com.baymax.validator.engine.KeyMode;
+import com.baymax.validator.engine.preset.DbType;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.util.HashSet;
 
 public class DatetimeFieldRuleTest {
@@ -15,7 +14,7 @@ public class DatetimeFieldRuleTest {
     @Before
     public void init() {
         HxValidator.Engine.create()
-                .dbType(DataBaseType.mysql)
+                .dbType(DbType.mysql)
                 .commonRules("value_rules_common.yml")
                 .rules("rule/datetime_field_rule.yml")
                 .ruleDict("common_dict.yml")

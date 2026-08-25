@@ -5,12 +5,18 @@ import com.baymax.validator.engine.constant.Const;
 import org.yaml.snakeyaml.Yaml;
 
 import java.io.*;
+import java.net.JarURLConnection;
+import java.net.MalformedURLException;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 /**
  * YAML 配置文件加载器，负责加载 value_rules 和 common_dict 配置
@@ -196,7 +202,9 @@ public class YamlConfigLoader {
 
         // 解析目录路径，获取所有目录配置源
         // 第二个参数 true 表示这是目录而不是文件
-        List<ConfigSource> dirSources = resolveConfigSources(rulesDir, true);
+        List<ConfigSource> dirSources = resolveConfigSources(rulesDir);
+        logger.info("loadValueRulesYmlFromDir rulesDir: " + rulesDir);
+        logger.info("dirSources: " + dirSources);
 
         // 如果没有找到任何目录，尝试降级到单文件加载
         if (dirSources.isEmpty()) {
@@ -234,17 +242,6 @@ public class YamlConfigLoader {
     // ==================== 私有方法 - 路径解析 ====================
 
     /**
-     * 解析配置源（重载方法，默认为文件模式）
-     *
-     * @param path 文件或目录路径
-     * @return 配置源列表
-     */
-    private List<ConfigSource> resolveConfigSources(String path) {
-        // 调用重载方法，默认不是目录
-        return resolveConfigSources(path, false);
-    }
-
-    /**
      * 解析配置源
      *
      * 该方法按以下优先级查找配置：
@@ -253,10 +250,9 @@ public class YamlConfigLoader {
      * 3. 如果绝对路径不存在，尝试作为 classpath 资源
      *
      * @param path      文件或目录路径
-     * @param isDir     是否为目录（true: 目录, false: 文件）
      * @return 配置源列表
      */
-    private List<ConfigSource> resolveConfigSources(String path, boolean isDir) {
+    private List<ConfigSource> resolveConfigSources(String path) {
         // 创建列表存储找到的配置源
         List<ConfigSource> sources = new ArrayList<>();
 
@@ -268,21 +264,14 @@ public class YamlConfigLoader {
 
         // 检查是否为绝对路径（以 / 开头或包含盘符，如 C:\）
         if (filePath.isAbsolute()) {
+            logger.info("isAbsolute");
             // 将 Path 转换为 File 对象
             File file = filePath.toFile();
 
             // 检查文件或目录是否存在
             if (file.exists()) {
-                // 如果是目录且 isDir 为 true，添加目录配置源
-                if (isDir && file.isDirectory()) {
-                    sources.add(new FileConfigSource(file));
-                    return sources; // 找到后立即返回
-                }
-                // 如果是文件且 isDir 为 false，添加文件配置源
-                else if (!isDir && file.isFile()) {
-                    sources.add(new FileConfigSource(file));
-                    return sources; // 找到后立即返回
-                }
+                sources.add(new FileConfigSource(file));
+                return sources; // 找到后立即返回
             }
         }
 
@@ -296,12 +285,31 @@ public class YamlConfigLoader {
             // 遍历所有找到的资源
             while (resources.hasMoreElements()) {
                 URL url = resources.nextElement();
-                // 将 URL 包装为 UrlConfigSource
-                sources.add(new UrlConfigSource(url));
+
+                // 关键：判断 URL 协议类型
+                if (url.getProtocol().equals("file")) {
+                    logger.info("classpath file:" + url);
+                    // 文件系统路径 → 用 File API
+                    // 可以遍历内部的文件
+                    File dir = new File(url.toURI());
+                    if (dir.exists()) {
+                        sources.add(new FileConfigSource(dir));
+                    }
+                }
+                else if (url.getProtocol().equals("jar")) {
+                    logger.info("classpath jar:" + url);
+                    // JAR 包内的资源 → 用 JarFile API
+                    // 将 URL 包装为 UrlConfigSource
+                    // 比如后续组装成value_rules.yml
+                    sources.add(new UrlConfigSource(url));
+                }
             }
         } catch (IOException e) {
             // 如果加载 classpath 资源失败，记录警告
             logger.log(Level.WARNING, "Failed to load classpath resources for: " + path, e);
+            throw new RuntimeException(e);
+        } catch (URISyntaxException e) {
+            throw new RuntimeException(e);
         }
 
         // ===== 第三步：降级处理 - 绝对路径不存在时尝试 classpath =====
@@ -312,6 +320,7 @@ public class YamlConfigLoader {
                 // 从 classpath 中获取资源
                 // 注意：这里会去掉绝对路径的前导 /，因为 classpath 不需要
                 URL resource = App.class.getClassLoader().getResource(path);
+                logger.info("降级处理:" + resource);
                 if (resource != null) {
                     sources.add(new UrlConfigSource(resource));
                 }
@@ -319,7 +328,8 @@ public class YamlConfigLoader {
                 logger.log(Level.WARNING, "Failed to load resource as classpath: " + path, e);
             }
         }
-
+        logger.info("sources:" + sources);
+        logger.info("sources size:" + sources.size());
         return sources;
     }
 
@@ -341,44 +351,70 @@ public class YamlConfigLoader {
 
         // 遍历所有目录源
         for (ConfigSource source : dirSources) {
+            logger.info("collectYamlFiles source:" + source);
+            logger.info("collectYamlFiles source class:" + source.getClass());
             // ===== 处理文件系统目录 =====
             if (source instanceof FileConfigSource) {
                 // 获取目录的 File 对象
-                File dir = ((FileConfigSource) source).getFile();
+                File fileOrDir = ((FileConfigSource) source).getFile();
+                if(fileOrDir.isDirectory()) {
+                    // 列出目录下所有匹配 YAML 扩展名的文件
+                    // 使用 FileFilter 过滤：只保留 .yml 或 .yaml 结尾的文件
+                    File[] files = fileOrDir.listFiles((d, name) -> name.matches(YAML_EXTENSION_PATTERN));
 
-                // 列出目录下所有匹配 YAML 扩展名的文件
-                // 使用 FileFilter 过滤：只保留 .yml 或 .yaml 结尾的文件
-                File[] files = dir.listFiles((d, name) -> name.matches(YAML_EXTENSION_PATTERN));
-
-                // 如果找到了文件，将它们添加到结果列表
-                if (files != null) {
-                    for (File file : files) {
-                        yamlFiles.add(new FileConfigSource(file));
+                    // 如果找到了文件，将它们添加到结果列表
+                    if (files != null) {
+                        for (File file : files) {
+                            yamlFiles.add(new FileConfigSource(file));
+                            logger.info("FileConfigSource: " + file.getAbsolutePath());
+                        }
                     }
+                }
+                else {
+                    yamlFiles.add(new FileConfigSource(fileOrDir));
                 }
             }
             // ===== 处理 URL 资源（如 jar 包中的目录） =====
             else if (source instanceof UrlConfigSource) {
-                // 对于 URL 资源，无法枚举目录内容
-                // 尝试加载该目录下的默认规则文件
-                URL url = ((UrlConfigSource) source).getUrl();
-
-                // 确保 URL 以 / 结尾
+                URL url = ((UrlConfigSource)source).getUrl();
                 String urlPath = url.toString();
                 if (!urlPath.endsWith("/")) {
                     urlPath += "/";
                 }
 
-                try {
-                    // 构造默认规则文件的完整 URL
-                    // 例如：jar:file:/lib/default.jar!/META-INF/default/rules/ + validation-rules.yml
-                    String defaultFile = urlPath + Const.VALUE_RULES_FILENAME;
-                    URL fileUrl = new URL(defaultFile);
-                    // 将文件 URL 添加到结果列表
-                    yamlFiles.add(new UrlConfigSource(fileUrl));
-                } catch (Exception e) {
-                    // 如果没有找到默认规则文件，记录调试日志
-                    logger.log(Level.FINE, "No default rules file found in: " + url);
+                if ("jar".equals(url.getProtocol())) {
+                    JarURLConnection conn = null;
+
+                    try {
+                        conn = (JarURLConnection)url.openConnection();
+                        JarFile jarFile = conn.getJarFile();
+                        Enumeration<JarEntry> entries = jarFile.entries();
+                        String dirName = conn.getEntryName();
+                        if (!dirName.endsWith("/")) {
+                            dirName = dirName + "/";
+                        }
+
+                        while(entries.hasMoreElements()) {
+                            JarEntry entry = (JarEntry)entries.nextElement();
+                            String entryName = entry.getName();
+                            if (entryName.startsWith(dirName) && !entry.isDirectory()) {
+                                String relativePath = entryName.substring(dirName.length());
+                                if (!relativePath.contains("/")) {
+                                    logger.info("文件名: " + relativePath);
+                                    logger.info("文件名entryName: " + entryName);
+
+                                    String ymlFile = urlPath + relativePath;
+                                    logger.info("UrlConfigSource: " + ymlFile);
+
+                                    URL fileUrl = new URL(ymlFile);
+                                    // 将文件 URL 添加到结果列表
+                                    yamlFiles.add(new UrlConfigSource(fileUrl));
+                                }
+                            }
+                        }
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
                 }
             }
         }
@@ -414,6 +450,7 @@ public class YamlConfigLoader {
                     // 由于 YAML 结构为：{表名: {字段名: {验证规则}}}
                     // 所以类型为 Map<String, Map<String, Object>>
                     Map<String, Map<String, Object>> map = yaml.loadAs(content, Map.class);
+                    logger.info("[loadConfigs] load rules: " + map);
 
                     // 如果解析结果不为 null，添加到列表
                     if (map != null) {

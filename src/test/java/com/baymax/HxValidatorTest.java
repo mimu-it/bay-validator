@@ -1,9 +1,9 @@
 package com.baymax;
 
-import com.baymax.validator.engine.DataBaseType;
 import com.baymax.validator.engine.HxValidator;
 import com.baymax.validator.engine.KeyMode;
 import com.baymax.validator.engine.exception.IllegalValueException;
+import com.baymax.validator.engine.preset.DbType;
 import com.baymax.vo.Student;
 import org.junit.Assert;
 import org.junit.Before;
@@ -27,7 +27,7 @@ public class HxValidatorTest {
     @Before
     public void init() {
         HxValidator.Engine.create()
-                .dbType(DataBaseType.mysql)
+                .dbType(DbType.mysql)
                 .commonRules("value_rules_common.yml")
                 .rules("value_rules.yml")
                 .ruleDict("common_dict.yml")

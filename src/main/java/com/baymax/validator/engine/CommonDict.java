@@ -40,6 +40,7 @@ public enum CommonDict {
         dict.putAll(dictDefault);
 
         if(!regexDictYmlFilePath.equals(Const.COMMON_DICT_FILENAME)) {
+            // 加载自定的枚举字典
             Map<String, Object> dictFromOther = configLoader.loadCommonRuleDictYml(regexDictYmlFilePath);
             dict.putAll(dictFromOther);
         }

@@ -1,8 +1,8 @@
 package com.baymax.rule;
 
-import com.baymax.validator.engine.DataBaseType;
 import com.baymax.validator.engine.HxValidator;
 import com.baymax.validator.engine.KeyMode;
+import com.baymax.validator.engine.preset.DbType;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -13,7 +13,7 @@ public class EnumNumericFieldRuleTest {
     @Before
     public void init() {
         HxValidator.Engine.create()
-                .dbType(DataBaseType.mysql)
+                .dbType(DbType.mysql)
                 .commonRules("value_rules_common.yml")
                 .rules("rule/enum_numeric_field_rule.yml")
                 .ruleDict("common_dict.yml")

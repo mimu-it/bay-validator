@@ -7,6 +7,7 @@ import com.baymax.validator.engine.generator.kit.TableMetaKit;
 import com.baymax.validator.engine.generator.meta.ColumnMeta;
 import com.baymax.validator.engine.generator.meta.TableMeta;
 import com.baymax.validator.engine.model.FieldRule;
+import com.baymax.validator.engine.preset.DbType;
 import com.baymax.validator.engine.utils.FileWriter;
 import com.baymax.validator.engine.utils.StrUtil;
 
@@ -35,12 +36,12 @@ public class ValidatorCodeGenerator {
      * valueRuleModulePath 和 valueEnumRangeModulePath 都可以是
      * String moduleTargetPath = System.getProperty("user.dir") + "/spry-validator";
      */
-    public static void generateValidatorConfig(DataSource dataSource, String databaseName, List<String> exceptTables,
+    public static void generateValidatorConfig(DbType dbType, DataSource dataSource, String databaseName, List<String> exceptTables,
                                                String valueRuleModulePath,
                                                String valueEnumRangeModulePath,
                                                String packageName,
                                                Set<String> userIgnoreKeys, boolean customUseSnake,
-                                               String valueRulesDirectory) throws SQLException {
+                                               String valueRulesDirectory, boolean fromDir) throws SQLException {
         ValidatorEngine.INSTANCE.setUserIgnoreKeys(userIgnoreKeys);
         // 1. 获取校验规则 YAML 文件的存放目录
         // 示例：valueRulesDirectory = "validator/rules"
@@ -48,14 +49,23 @@ public class ValidatorCodeGenerator {
         String valueRulesYmlDirectory = normalizeValueRulesYmlDirectory(valueRulesDirectory);
 
         // 2. 获取旧的配置文件路径
-        // 示例：oldValueRulesYmlFilePath = "validator/rules/value_rules.yml"
-        String oldValueRulesYmlFilePath = valueRulesYmlDirectory + Const.VALUE_RULES_FILENAME;
         // 示例：regexDictYmlFilePath = "validator/rules/common_dict.yml"
         String regexDictYmlFilePath = valueRulesYmlDirectory + Const.COMMON_DICT_FILENAME;
 
         // 3. 加载旧的配置（用于合并）
+        // 注意这里是单文件的旧配置
         YamlConfigLoader configLoader = new YamlConfigLoader();
-        Map<String, Map<String, Object>> oldConfig = configLoader.loadValueRulesYml(oldValueRulesYmlFilePath);
+
+        Map<String, Map<String, Object>> oldConfig;
+        if(fromDir) {
+            oldConfig = configLoader.loadValueRulesYmlFromDir(valueRulesYmlDirectory + "rules");
+        }
+        else {
+            // 示例：oldValueRulesYmlFilePath = "validator/rules/value_rules.yml"
+            oldConfig = configLoader.loadValueRulesYml(valueRulesYmlDirectory + Const.VALUE_RULES_FILENAME);
+        }
+
+        logger.info("load old yml rules: " + oldConfig.keySet());
 
         // 4. 从数据库获取所有表名（排除指定表）
         // 示例：tables = ["user", "order", "product", "category"]
@@ -63,6 +73,8 @@ public class ValidatorCodeGenerator {
         if(tables == null || tables.isEmpty()) {
             return;
         }
+
+        logger.info("have tables: " + tables);
 
         // 5. 构建表元数据映射（表名 -> 表结构信息）
         // 示例返回结果：
@@ -125,8 +137,8 @@ public class ValidatorCodeGenerator {
         ValidatorEngine.INSTANCE.generatePerTableYmlFiles(mergedTableMap, rulesDirPath);
 
         // 初始化引擎，生成枚举代码
-        ValidatorEngine.INSTANCE.initFromDir(
-                rulesDirPath, regexDictYmlFilePath, null, regexDictYmlFilePath,
+        ValidatorEngine.INSTANCE.initFromDir(dbType,
+                rulesDirPath, null, regexDictYmlFilePath,
                 null, customUseSnake);
 
         String sourceFormat = ValidatorEngine.INSTANCE.generateJavaEnumCode(packageName);
@@ -139,6 +151,7 @@ public class ValidatorCodeGenerator {
             FileWriter.write(valueEnumRangePath.toString(), "ValueEnumRange", "java", sourceFormat);
         }
     }
+
 
     private static Map<String, TableMeta> buildTableMetaMap(DataSource dataSource, List<String> tables) throws SQLException {
         return ValidatorEngine.makeStringTableMetaMap(dataSource, tables);

@@ -222,6 +222,7 @@ public class EnumCodeGenerator {
 
         logger.info("Starting enum code generation for package: " + packageName);
         logger.info("Processing " + valueRulesMap.size() + " tables");
+        logger.info("valueRulesMap: " + valueRulesMap);
 
         try {
             // ============ 2. 预加载模板 ============

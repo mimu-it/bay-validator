@@ -4,6 +4,7 @@ import com.baymax.validator.engine.exception.ErrorCode;
 import com.baymax.validator.engine.exception.IllegalValueException;
 import com.baymax.validator.engine.generator.ValidatorCodeGenerator;
 import com.baymax.validator.engine.generator.formatter.IFormatter;
+import com.baymax.validator.engine.preset.DbType;
 import com.baymax.validator.engine.utils.StrUtil;
 import org.apache.commons.lang3.StringUtils;
 
@@ -27,7 +28,7 @@ public class HxValidator {
      * 用于引擎初始化
      */
     public static class Engine {
-        private DataBaseType dbType;
+        private DbType dbType;
         private String valueRulesYmlFilePath;
         private String commonValueRulesYmlFilePath;
         private String ruleDictYmlFilePath;
@@ -40,7 +41,7 @@ public class HxValidator {
             return new Engine();
         }
 
-        public Engine dbType(DataBaseType dbType) {
+        public Engine dbType(DbType dbType) {
             this.dbType = dbType;
             return this;
         }
@@ -87,7 +88,7 @@ public class HxValidator {
             }
 
             if(useRulesDir) {
-                ValidatorEngine.INSTANCE.initFromDir(this.dbType.name(),
+                ValidatorEngine.INSTANCE.initFromDir(this.dbType,
                         this.valueRulesYmlFilePath,
                         this.commonValueRulesYmlFilePath,
                         this.ruleDictYmlFilePath,
@@ -168,6 +169,12 @@ public class HxValidator {
                         .params(validatorKey, paramValue).build();
             }
 
+            if(!validatorKey.contains(".")) {
+                if(StrUtil.isNotBlank(hxValidator.tableName)) {
+                    validatorKey = hxValidator.tableName + "." + validatorKey;
+                }
+            }
+
             boolean result = hxValidator.validate(validatorKey, paramValue);
             if(!result) {
                 throw IllegalValueException.builder().errorCode(ErrorCode.validate_failure.name())
@@ -193,6 +200,49 @@ public class HxValidator {
                 return this;
             }
 
+            if(!validatorKey.contains(".")) {
+                if(StrUtil.isNotBlank(hxValidator.tableName)) {
+                    validatorKey = hxValidator.tableName + "." + validatorKey;
+                }
+            }
+
+            boolean result = hxValidator.validate(validatorKey, paramValue);
+            if(!result) {
+                throw IllegalValueException.builder().errorCode(ErrorCode.validate_failure.name())
+                        .params(validatorKey, paramValue).build();
+            }
+
+            return this;
+        }
+
+        /**
+         * 链式验证单个参数， 但是允许为 "" 和 null
+         * @param validatorKey
+         * @param paramValue
+         * @return
+         */
+        public Builder validateIfNonBlank(String validatorKey, Object paramValue) {
+            if(StringUtils.isBlank(validatorKey)) {
+                throw IllegalValueException.builder().errorCode(ErrorCode.illegal_argument.name())
+                        .params(validatorKey, paramValue).build();
+            }
+
+            if(paramValue == null) {
+                return this;
+            }
+
+            if(paramValue instanceof String) {
+                if(StrUtil.isBlank((String) paramValue)) {
+                    return this;
+                }
+            }
+
+            if(!validatorKey.contains(".")) {
+                if(StrUtil.isNotBlank(hxValidator.tableName)) {
+                    validatorKey = hxValidator.tableName + "." + validatorKey;
+                }
+            }
+
             boolean result = hxValidator.validate(validatorKey, paramValue);
             if(!result) {
                 throw IllegalValueException.builder().errorCode(ErrorCode.validate_failure.name())
@@ -207,6 +257,7 @@ public class HxValidator {
      * 用于生成代码
      */
     public static class Generator {
+        private DbType dbType;
         private DataSource dataSource;
         private String databaseName;
         private List<String> exceptTables;
@@ -221,15 +272,16 @@ public class HxValidator {
             return new Generator();
         }
 
-        public Generator bindToDatabase(DataSource dataSource, String databaseName) {
-            this.bindToDatabase(dataSource, databaseName, null);
+        public Generator bindToDatabase(DbType dbType, DataSource dataSource, String databaseName) {
+            this.bindToDatabase(dbType, dataSource, databaseName, null);
             return this;
         }
 
-        public Generator bindToDatabase(DataSource dataSource, String databaseName, List<String> exceptTables) {
+        public Generator bindToDatabase(DbType dbType, DataSource dataSource, String databaseName, List<String> exceptTables) {
             this.dataSource = dataSource;
             this.databaseName = databaseName;
             this.exceptTables = exceptTables;
+            this.dbType = dbType;
             return this;
         }
 
@@ -259,12 +311,21 @@ public class HxValidator {
         }
 
         public void generate() throws SQLException {
-            ValidatorCodeGenerator.generateValidatorConfig(
+            ValidatorCodeGenerator.generateValidatorConfig(dbType,
                     dataSource, databaseName, exceptTables,
                     valueRuleModulePath,
                     valueEnumRangeModulePath,
                     packageName, userIgnoreKeys,
-                    customUseSnake, valueRulesDirectory);
+                    customUseSnake, valueRulesDirectory, false);
+        }
+
+        public void generateFromDir() throws SQLException {
+            ValidatorCodeGenerator.generateValidatorConfig(dbType,
+                    dataSource, databaseName, exceptTables,
+                    valueRuleModulePath,
+                    valueEnumRangeModulePath,
+                    packageName, userIgnoreKeys,
+                    customUseSnake, valueRulesDirectory, true);
         }
     }
 
@@ -288,6 +349,10 @@ public class HxValidator {
 
     public void setTableName(String tableName) {
         this.tableName = tableName;
+    }
+
+    public String getTableName() {
+        return tableName;
     }
 
     public void setIgnoreKeys(String[] ignoreKeys) {

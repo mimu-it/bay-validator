@@ -450,13 +450,13 @@ public enum ValidatorEngine {
      *                                 "common_dict.yml", ignoreKeys, true);
      *                             }</pre>
      */
-    public void initFromDir(String dbType, String valueRulesDir, String commonValueRulesPath,
+    public void initFromDir(DbType dbType, String valueRulesDir, String commonValueRulesPath,
                             String regexDictYmlFilePath,
                             Set<String> userIgnoreKeys, boolean customUseSnake) {
         this.isSnakeKeyMode = customUseSnake;
         setUserIgnoreKeys(userIgnoreKeys);
 
-        initDbType(dbType);
+        initDbType(dbType.name());
         CommonDict.INSTANCE.init(regexDictYmlFilePath);
         this.valueRulesMap = configLoader.loadValueRulesYmlFromDir(valueRulesDir);
 
