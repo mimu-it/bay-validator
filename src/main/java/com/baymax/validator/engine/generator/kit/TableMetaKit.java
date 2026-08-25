@@ -391,7 +391,7 @@ public class TableMetaKit {
 	 * </pre>
 	 *
 	 */
-	private static boolean isMySQLOrMariaDB(String dbProduct) {
+	public static boolean isMySQLOrMariaDB(String dbProduct) {
 		if (dbProduct == null) {
 			return false;
 		}
@@ -409,7 +409,7 @@ public class TableMetaKit {
 	 * </pre>
 	 *
 	 */
-	private static boolean isOracle(String dbProduct) {
+	public static boolean isOracle(String dbProduct) {
 		if (dbProduct == null) {
 			return false;
 		}

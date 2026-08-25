@@ -3,6 +3,7 @@ package com.baymax.validator.engine;
 import com.baymax.validator.engine.constant.Const;
 import com.baymax.validator.engine.utils.StrUtil;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -33,7 +34,17 @@ public enum CommonDict {
         regexDictYmlFilePath = StrUtil.isBlank(regexDictYmlFilePath) ?
                 Const.COMMON_DICT_FILENAME : regexDictYmlFilePath;
 
-        dict = configLoader.loadCommonRuleDictYml(regexDictYmlFilePath);
+        Map<String, Object> dictDefault = configLoader.loadCommonRuleDictYml(Const.COMMON_DICT_FILENAME);
+
+        dict = new HashMap<>(dictDefault.size());
+        dict.putAll(dictDefault);
+
+        if(!regexDictYmlFilePath.equals(Const.COMMON_DICT_FILENAME)) {
+            // 加载自定的枚举字典
+            Map<String, Object> dictFromOther = configLoader.loadCommonRuleDictYml(regexDictYmlFilePath);
+            dict.putAll(dictFromOther);
+        }
+
         if(dict == null) {
             throw new IllegalStateException("load " + Const.COMMON_DICT_FILENAME + " failed");
         }

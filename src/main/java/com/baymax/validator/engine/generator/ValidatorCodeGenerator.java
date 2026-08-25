@@ -7,6 +7,7 @@ import com.baymax.validator.engine.generator.kit.TableMetaKit;
 import com.baymax.validator.engine.generator.meta.ColumnMeta;
 import com.baymax.validator.engine.generator.meta.TableMeta;
 import com.baymax.validator.engine.model.FieldRule;
+import com.baymax.validator.engine.preset.DbType;
 import com.baymax.validator.engine.utils.FileWriter;
 import com.baymax.validator.engine.utils.StrUtil;
 
@@ -18,6 +19,7 @@ import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.logging.Logger;
 
 /**
  * @author xiao.hu
@@ -25,31 +27,45 @@ import java.util.*;
  * @apiNote
  */
 public class ValidatorCodeGenerator {
+    private static final Logger logger = Logger.getLogger(ValidatorCodeGenerator.class.getName());
 
     /**
      * 生成字段校验相关的java类，此类用于数据校验，根据此类可以得到对应的属性，可以以json的形式反馈到前端
      * 用于前端js校验
+     *
+     * valueRuleModulePath 和 valueEnumRangeModulePath 都可以是
+     * String moduleTargetPath = System.getProperty("user.dir") + "/spry-validator";
      */
-    public static void generateValidatorConfig(DataSource dataSource, String databaseName, List<String> exceptTables,
-                                               String valueRuleModuleTargetPath,
-                                               String valueEnumRangeModuleTargetPath,
+    public static void generateValidatorConfig(DbType dbType, DataSource dataSource, String databaseName, List<String> exceptTables,
+                                               String valueRuleModulePath,
+                                               String valueEnumRangeModulePath,
                                                String packageName,
                                                Set<String> userIgnoreKeys, boolean customUseSnake,
-                                               String valueRulesDirectory) throws SQLException {
+                                               String valueRulesDirectory, boolean fromDir) throws SQLException {
+        ValidatorEngine.INSTANCE.setUserIgnoreKeys(userIgnoreKeys);
         // 1. 获取校验规则 YAML 文件的存放目录
         // 示例：valueRulesDirectory = "validator/rules"
         // 返回：valueRulesYmlDirectory = "validator/rules/"
         String valueRulesYmlDirectory = normalizeValueRulesYmlDirectory(valueRulesDirectory);
 
         // 2. 获取旧的配置文件路径
-        // 示例：oldValueRulesYmlFilePath = "validator/rules/value_rules.yml"
-        String oldValueRulesYmlFilePath = valueRulesYmlDirectory + Const.VALUE_RULES_FILENAME;
         // 示例：regexDictYmlFilePath = "validator/rules/common_dict.yml"
         String regexDictYmlFilePath = valueRulesYmlDirectory + Const.COMMON_DICT_FILENAME;
 
         // 3. 加载旧的配置（用于合并）
+        // 注意这里是单文件的旧配置
         YamlConfigLoader configLoader = new YamlConfigLoader();
-        Map<String, Map<String, Object>> oldConfig = configLoader.loadValueRulesYml(oldValueRulesYmlFilePath);
+
+        Map<String, Map<String, Object>> oldConfig;
+        if(fromDir) {
+            oldConfig = configLoader.loadValueRulesYmlFromDir(valueRulesYmlDirectory + "rules");
+        }
+        else {
+            // 示例：oldValueRulesYmlFilePath = "validator/rules/value_rules.yml"
+            oldConfig = configLoader.loadValueRulesYml(valueRulesYmlDirectory + Const.VALUE_RULES_FILENAME);
+        }
+
+        logger.info("load old yml rules: " + oldConfig.keySet());
 
         // 4. 从数据库获取所有表名（排除指定表）
         // 示例：tables = ["user", "order", "product", "category"]
@@ -57,6 +73,8 @@ public class ValidatorCodeGenerator {
         if(tables == null || tables.isEmpty()) {
             return;
         }
+
+        logger.info("have tables: " + tables);
 
         // 5. 构建表元数据映射（表名 -> 表结构信息）
         // 示例返回结果：
@@ -85,6 +103,7 @@ public class ValidatorCodeGenerator {
 
                 // 忽略用户指定或系统默认的字段（如：id, version, deleted 等）
                 if(ValidatorEngine.containIgnoreKeys(columnName)) {
+                    logger.info("ignore column: " + columnName);
                     continue;
                 }
 
@@ -108,7 +127,7 @@ public class ValidatorCodeGenerator {
         // 7. 构建目标资源路径
         // 示例：valueRuleModuleTargetPath = "/project/validator-module"
         // 结果：srcResourcesPath = "/project/validator-module/src/main/resources/validator/rules/"
-        Path srcResourcesPath = Paths.get(valueRuleModuleTargetPath, "..", "..", "src", "main", "resources", valueRulesYmlDirectory);
+        Path srcResourcesPath = Paths.get(valueRuleModulePath, "src", "main", "resources", valueRulesYmlDirectory);
 
         // 构建合并的 tableMap（保留旧配置，合并新配置，删除已废弃字段）
         Map<String, Object> mergedTableMap = ValidatorEngine.INSTANCE.buildMergedTableMap(oldConfig, list);
@@ -118,18 +137,21 @@ public class ValidatorCodeGenerator {
         ValidatorEngine.INSTANCE.generatePerTableYmlFiles(mergedTableMap, rulesDirPath);
 
         // 初始化引擎，生成枚举代码
-        ValidatorEngine.INSTANCE.initFromDir(
-                rulesDirPath, regexDictYmlFilePath, null, regexDictYmlFilePath,
-                userIgnoreKeys, customUseSnake);
+        ValidatorEngine.INSTANCE.initFromDir(dbType,
+                rulesDirPath, null, regexDictYmlFilePath,
+                null, customUseSnake);
 
         String sourceFormat = ValidatorEngine.INSTANCE.generateJavaEnumCode(packageName);
+        if(StrUtil.isNotBlank(sourceFormat)) {
+            // 有可能没有枚举内容
+            Path srcJavaPath = Paths.get(valueEnumRangeModulePath, "src", "main", "java");
+            String packagePath = packageName.replaceAll("\\.", File.separator);
+            Path valueEnumRangePath = Paths.get(srcJavaPath.toString(), packagePath);
 
-        Path srcJavaPath = Paths.get(valueEnumRangeModuleTargetPath, "..", "..", "src", "main", "java");
-        String packagePath = packageName.replaceAll("\\.", File.separator);
-        Path valueEnumRangePath = Paths.get(srcJavaPath.toString(), packagePath);
-
-        FileWriter.write(valueEnumRangePath.toString(), "ValueEnumRange", "java", sourceFormat);
+            FileWriter.write(valueEnumRangePath.toString(), "ValueEnumRange", "java", sourceFormat);
+        }
     }
+
 
     private static Map<String, TableMeta> buildTableMetaMap(DataSource dataSource, List<String> tables) throws SQLException {
         return ValidatorEngine.makeStringTableMetaMap(dataSource, tables);

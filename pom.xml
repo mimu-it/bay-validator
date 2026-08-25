@@ -6,7 +6,7 @@
 
     <groupId>com.baymax</groupId>
     <artifactId>bay-validator</artifactId>
-    <version>1.8-SNAPSHOT</version>
+    <version>1.8.0-jdk8</version>
 
     <name>bay-validator</name>
 
@@ -15,7 +15,8 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>8</maven.compiler.source>
         <maven.compiler.target>8</maven.compiler.target>
-        <jackson.version>2.18.0</jackson.version>
+        <!-- 保持与springboot 2.7.18 所使用的版本一致 -->
+        <jackson.version>2.13.5</jackson.version>
     </properties>
 
     <dependencies>

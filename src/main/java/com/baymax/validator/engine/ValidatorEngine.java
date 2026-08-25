@@ -376,8 +376,7 @@ public enum ValidatorEngine {
                      String regexDictYmlFilePath,
                      Set<String> userIgnoreKeys, boolean customUseSnake) {
         this.isSnakeKeyMode = customUseSnake;
-        ignoreKeys = userIgnoreKeys;
-        checkIgnoreKeysForLegality();
+        setUserIgnoreKeys(userIgnoreKeys);
         init(dbType, valueRulesYmlFilePath, commonValueRulesYmlFilePath, regexDictYmlFilePath);
     }
 
@@ -398,8 +397,7 @@ public enum ValidatorEngine {
     public void init(String dbType, String valueRulesYmlFilePath, String regexDictYmlFilePath,
                      Set<String> userIgnoreKeys, boolean customUseSnake, boolean lruCacheOpen, int lruCacheSize) {
         this.isSnakeKeyMode = customUseSnake;
-        ignoreKeys = userIgnoreKeys;
-        checkIgnoreKeysForLegality();
+        setUserIgnoreKeys(userIgnoreKeys);
         init0(dbType, valueRulesYmlFilePath, regexDictYmlFilePath);
     }
 
@@ -442,7 +440,7 @@ public enum ValidatorEngine {
      *
      * @param dbType               数据库类型名称
      * @param valueRulesDir        主规则目录（相对于 classpath）
-     * @param commonValueRulesDir  通用规则目录（可为 null）
+     * @param commonValueRulesPath  通用规则目录（可为 null）
      * @param regexDictYmlFilePath common_dict 路径
      * @param userIgnoreKeys       自定义忽略字段集合
      * @param customUseSnake       {@code true}=下划线命名模式
@@ -452,19 +450,29 @@ public enum ValidatorEngine {
      *                                 "common_dict.yml", ignoreKeys, true);
      *                             }</pre>
      */
-    public void initFromDir(String dbType, String valueRulesDir, String commonValueRulesDir,
+    public void initFromDir(DbType dbType, String valueRulesDir, String commonValueRulesPath,
                             String regexDictYmlFilePath,
                             Set<String> userIgnoreKeys, boolean customUseSnake) {
         this.isSnakeKeyMode = customUseSnake;
-        ignoreKeys = userIgnoreKeys;
-        checkIgnoreKeysForLegality();
+        setUserIgnoreKeys(userIgnoreKeys);
 
-        initDbType(dbType);
+        initDbType(dbType.name());
         CommonDict.INSTANCE.init(regexDictYmlFilePath);
         this.valueRulesMap = configLoader.loadValueRulesYmlFromDir(valueRulesDir);
 
-        if (commonValueRulesDir != null) {
-            this.commonValueRulesMap = configLoader.loadValueRulesYmlFromDir(commonValueRulesDir);
+        if (commonValueRulesPath != null) {
+            this.commonValueRulesMap = configLoader.loadValueRulesYml(commonValueRulesPath);
+        }
+    }
+
+    /**
+     * 设置自定义需要忽略
+     * @param userIgnoreKeys
+     */
+    public void setUserIgnoreKeys(Set<String> userIgnoreKeys) {
+        if(userIgnoreKeys != null) {
+            ignoreKeys = userIgnoreKeys;
+            checkIgnoreKeysForLegality();
         }
     }
 
@@ -476,15 +484,14 @@ public enum ValidatorEngine {
      */
     private void checkIgnoreKeysForLegality() {
         for (String key : ignoreKeys) {
+            char[] chars = key.toCharArray();
             if (this.isSnakeKeyMode) {
-                char[] chars = key.toCharArray();
                 for (char s : chars) {
                     if (Character.isUpperCase(s)) {
                         throw new IllegalArgumentException("ignore keys must be snake naming mode");
                     }
                 }
             } else {
-                char[] chars = key.toCharArray();
                 for (char s : chars) {
                     if (s == '_') {
                         throw new IllegalArgumentException("ignore keys must be camel naming mode");
@@ -561,7 +568,7 @@ public enum ValidatorEngine {
      */
     private String[] secureFieldKey(String fieldKey) {
         if (fieldKey == null) {
-            throw new IllegalArgumentException("fieldKey is illegal");
+            throw new IllegalArgumentException("fieldKey is illegal, fieldKey is null");
         }
         String[] keys = fieldKey.split("\\.");
         if (keys.length != 2) {
@@ -674,7 +681,7 @@ public enum ValidatorEngine {
     public String getFieldValidatorRulesStr(String fieldKey) {
         try {
             return mapper.writeValueAsString(this.getFieldValidatorRules(fieldKey));
-        } catch (JsonProcessingException e) {
+        } catch (Exception e) {
             logger.log(Level.WARNING, "Failed to serialize field rules for " + fieldKey, e);
         }
         return null;
@@ -714,7 +721,6 @@ public enum ValidatorEngine {
         fieldRule.setFieldKey("");
 
         try {
-            mapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
             String jsonStr = mapper.writeValueAsString(fieldRule);
 
             if (!RuleType.string.name().equals(fieldRule.getType())) {
@@ -739,7 +745,7 @@ public enum ValidatorEngine {
             String charset = fieldRule.getStringCharset();
             m.put("lengthMode", org.apache.commons.lang3.StringUtils.isBlank(charset) ? "char" : "byte");
             return m;
-        } catch (JsonProcessingException e) {
+        } catch (Exception e) {
             logger.log(Level.WARNING, "Failed to build field rule JSON for " + fieldKey, e);
         }
         return null;
@@ -758,7 +764,7 @@ public enum ValidatorEngine {
     public String getFieldValidatorRulesJsonStr(String fieldKey) {
         try {
             return mapper.writeValueAsString(this.getFieldValidatorRulesJson(fieldKey));
-        } catch (JsonProcessingException e) {
+        } catch (Exception e) {
             logger.log(Level.WARNING, "Failed to serialize field rule JSON for " + fieldKey, e);
         }
         return null;
